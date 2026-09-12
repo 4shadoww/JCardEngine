@@ -8,6 +8,7 @@ import javacard.framework.JCSystem;
 import javacard.framework.Util;
 import javacard.security.CryptoException;
 import javacard.security.Key;
+import javacard.security.KeyBuilder;
 import javacardx.crypto.Cipher;
 import org.bouncycastle.crypto.AsymmetricBlockCipher;
 import org.bouncycastle.crypto.DataLengthException;
@@ -78,13 +79,19 @@ public final class AsymmetricCipherImpl extends Cipher {
     byte algorithm;
     AsymmetricBlockCipher engine;
     CipherState state = CipherState.UNINITIALIZED;
-    byte[] buffer;
+    // Widest input of the largest supported RSA key.
+    private static final short MAX_INPUT = (short) (KeyBuilder.LENGTH_RSA_4096 / Byte.SIZE + 1);
+
+    final byte[] buffer;
+    // Input length allowed by the current key.
+    short bufferLen;
     short bufferPos;
 
     byte initMode;
 
     private AsymmetricCipherImpl(CipherAlg s) {
         resolve(s);
+        buffer = JCSystem.makeTransientByteArray(MAX_INPUT, JCSystem.CLEAR_ON_RESET);
     }
 
     public static Cipher getInstance(byte algorithm) {
@@ -117,8 +124,8 @@ public final class AsymmetricCipherImpl extends Cipher {
         KeyWithParameters key = (KeyWithParameters) theKey;
         initMode = theMode;
         engine.init(theMode == MODE_ENCRYPT, key.getParameters());
-        // JCRE 3.2 9.1: the API must not spend the caller's CLEAR_ON_DESELECT budget.
-        buffer = JCSystem.makeTransientByteArray((short) (engine.getInputBlockSize() + (theMode == MODE_ENCRYPT ? 1 : 0)), JCSystem.CLEAR_ON_RESET);
+        // BouncyCastle reports an encryption input block one byte short of the modulus width.
+        bufferLen = (short) (engine.getInputBlockSize() + (theMode == MODE_ENCRYPT && algorithm == ALG_RSA_NOPAD ? 1 : 0));
         bufferPos = 0;
         state = CipherState.INITIALIZED;
     }
@@ -139,38 +146,36 @@ public final class AsymmetricCipherImpl extends Cipher {
             CryptoException.throwIt(CryptoException.INVALID_INIT);
         }
 
-        if (initMode == MODE_ENCRYPT) {
-            if ((outBuff.length - outOffset) < engine.getOutputBlockSize()) {
-                CryptoException.throwIt(CryptoException.ILLEGAL_USE);
-            }
-            if ((inLength - inOffset) > engine.getInputBlockSize() + (algorithm == ALG_RSA_NOPAD ? 1 : 0)) {
-                CryptoException.throwIt(CryptoException.ILLEGAL_USE);
-            }
-        }
-        update(inBuff, inOffset, inLength, outBuff, outOffset);
-        if (algorithm == ALG_RSA_NOPAD) {
-            if (bufferPos < engine.getInputBlockSize()) {
-                CryptoException.throwIt(CryptoException.ILLEGAL_USE);
-            }
-        }
         try {
+            if (initMode == MODE_ENCRYPT) {
+                if ((outBuff.length - outOffset) < engine.getOutputBlockSize()) {
+                    CryptoException.throwIt(CryptoException.ILLEGAL_USE);
+                }
+                if ((inLength - inOffset) > engine.getInputBlockSize() + (algorithm == ALG_RSA_NOPAD ? 1 : 0)) {
+                    CryptoException.throwIt(CryptoException.ILLEGAL_USE);
+                }
+            }
+            update(inBuff, inOffset, inLength, outBuff, outOffset);
+            if (algorithm == ALG_RSA_NOPAD) {
+                if (bufferPos < engine.getInputBlockSize()) {
+                    CryptoException.throwIt(CryptoException.ILLEGAL_USE);
+                }
+            }
             byte[] data = engine.processBlock(buffer, (short) 0, bufferPos);
             short resultLen = (short) data.length;
-            // BouncyCastle strips leading zeros from c^d mod N, but real cards return the full
-            // modulus-width block left-padded with zeros, so pad the result back to modulus width
-            // (buffer.length; a decrypt init sizes buffer to exactly that width).
-            if (algorithm == ALG_RSA_NOPAD && initMode == MODE_DECRYPT && resultLen < (short) buffer.length) {
-                short padLen = (short) (buffer.length - resultLen);
+            // Restores the leading zeros BouncyCastle strips from a modulus-width ALG_RSA_NOPAD block.
+            if (algorithm == ALG_RSA_NOPAD && initMode == MODE_DECRYPT && resultLen < bufferLen) {
+                short padLen = (short) (bufferLen - resultLen);
                 Util.arrayFillNonAtomic(outBuff, outOffset, padLen, (byte) 0x00);
                 Util.arrayCopyNonAtomic(data, (short) 0, outBuff, (short) (outOffset + padLen), resultLen);
-                bufferPos = 0;
-                return (short) buffer.length;
+                return bufferLen;
             }
             Util.arrayCopyNonAtomic(data, (short) 0, outBuff, outOffset, resultLen);
-            bufferPos = 0;
             return resultLen;
         } catch (InvalidCipherTextException | DataLengthException ex) {
             CryptoException.throwIt(CryptoException.ILLEGAL_USE);
+        } finally {
+            reset();
         }
         return -1;
     }
@@ -180,12 +185,16 @@ public final class AsymmetricCipherImpl extends Cipher {
         if (!state.initialized()) {
             CryptoException.throwIt(CryptoException.INVALID_INIT);
         }
-        if (inLength > (buffer.length - bufferPos)) {
+        if (inLength > (bufferLen - bufferPos)) {
             CryptoException.throwIt(CryptoException.ILLEGAL_USE);
         }
         bufferPos = (short) (bufferPos + Util.arrayCopyNonAtomic(inBuff, inOffset, buffer, bufferPos, inLength));
         // JC 3.2: asymmetric update only buffers input, writes nothing, always returns 0
         return 0;
+    }
+
+    private void reset() {
+        bufferPos = 0;
     }
 
     @Override

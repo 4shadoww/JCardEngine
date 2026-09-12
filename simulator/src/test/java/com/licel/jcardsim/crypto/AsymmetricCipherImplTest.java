@@ -352,14 +352,9 @@ public class AsymmetricCipherImplTest extends SimulatorCoreTest {
         RSAPublicKey publicKey = (RSAPublicKey) keyPair.getPublic();
         encryptEngine.init(publicKey, Cipher.MODE_ENCRYPT);
 
+        // A second doFinal() overflows the 117-byte RSA-1024 PKCS#1 input if the first left its 59 bytes buffered
         byte[] buffer = new byte[256];
         encryptEngine.doFinal(buffer, (short) 0, (short) 59, buffer, (short) 0);
-        try {
-            encryptEngine.doFinal(buffer, (short) 0, (short) 59, buffer, (short) 0);
-        } catch (CryptoException e) {
-            // For RSA1024, data len into PKCS1 frame is 117B, but because AssymetricCipherImpl.bufferPos is not set
-            // to 0 during doFinal(), it will emit exception because 68 + 68 > 117
-            assert false;
-        }
+        encryptEngine.doFinal(buffer, (short) 0, (short) 59, buffer, (short) 0);
     }
 }

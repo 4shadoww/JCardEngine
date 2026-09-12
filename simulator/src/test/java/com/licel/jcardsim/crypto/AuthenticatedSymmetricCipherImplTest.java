@@ -462,6 +462,22 @@ public class AuthenticatedSymmetricCipherImplTest extends SimulatorCoreTest {
         assertTrue(Arrays.areEqual(decrypted, 0, msgPart1.length(), msgPart1.getBytes(), 0, msgPart1.length()));
         assertTrue(Arrays.areEqual(decrypted, msgPart1.length(), decrypted.length, msgPart2.getBytes(), 0, msgPart2.length()));
         assertTrue(engine.verifyTag(tag, (short) 0, (short) tag.length, TAG_SIZE));
+
+        AEADCipher again = (AEADCipher) Cipher.getInstance(AEADCipher.ALG_AES_GCM, false);
+        again.init(aesKey, Cipher.MODE_ENCRYPT, iv96Bit, (short) 0, (short) iv96Bit.length);
+        byte[] first = new byte[totalMsgLen];
+        again.doFinal(msgPart1.concat(msgPart2).getBytes(), (short) 0, totalMsgLen, first, (short) 0);
+        byte[] second = new byte[totalMsgLen];
+        again.doFinal(msgPart1.concat(msgPart2).getBytes(), (short) 0, totalMsgLen, second, (short) 0);
+
+        AEADCipher zeroNonce = (AEADCipher) Cipher.getInstance(AEADCipher.ALG_AES_GCM, false);
+        zeroNonce.init(aesKey, Cipher.MODE_ENCRYPT);
+        byte[] expected = new byte[totalMsgLen];
+        zeroNonce.doFinal(msgPart1.concat(msgPart2).getBytes(), (short) 0, totalMsgLen, expected, (short) 0);
+        // JC 3.2 AEADCipher.doFinal zeroes the nonce
+        assertEquals(second, expected);
+        // the first doFinal ran under iv96Bit
+        assertNotEquals(first, expected);
     }
 
     @Test

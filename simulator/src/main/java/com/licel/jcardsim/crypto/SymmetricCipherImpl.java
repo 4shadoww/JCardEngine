@@ -4,7 +4,6 @@
 package com.licel.jcardsim.crypto;
 
 import com.licel.jcardsim.crypto.CipherUtils.CipherState;
-import javacard.framework.JCSystem;
 import javacard.framework.Util;
 import javacard.security.CryptoException;
 import javacard.security.Key;
@@ -12,6 +11,7 @@ import javacard.security.KeyBuilder;
 import javacardx.crypto.Cipher;
 import org.bouncycastle.crypto.BlockCipher;
 import org.bouncycastle.crypto.BufferedBlockCipher;
+import org.bouncycastle.crypto.CipherParameters;
 import org.bouncycastle.crypto.DefaultBufferedBlockCipher;
 import org.bouncycastle.crypto.InvalidCipherTextException;
 import org.bouncycastle.crypto.modes.CBCBlockCipher;
@@ -124,6 +124,10 @@ public final class SymmetricCipherImpl extends Cipher {
     // manually, matching a card's eager block flush. Null for decrypt and the unpadded modes.
     BlockCipherPadding padding;
 
+    // Retained from init() for reset().
+    private CipherParameters keyParams;
+    private boolean encrypting;
+
     private SymmetricCipherImpl(CipherAlg spec) {
         this.spec = spec;
     }
@@ -142,7 +146,7 @@ public final class SymmetricCipherImpl extends Cipher {
     @Override
     public void init(Key theKey, byte theMode) throws CryptoException {
         selectCipherEngine(theKey, theMode == MODE_ENCRYPT);
-        engine.init(theMode == MODE_ENCRYPT, ((SymmetricKeyImpl) theKey).getParameters());
+        reset();
         state = CipherState.INITIALIZED;
     }
 
@@ -156,9 +160,9 @@ public final class SymmetricCipherImpl extends Cipher {
         if (bLen != engine.getBlockSize()) {
             CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
         }
-        byte[] iv = JCSystem.makeTransientByteArray(bLen, JCSystem.CLEAR_ON_RESET);
+        byte[] iv = new byte[bLen];
         Util.arrayCopyNonAtomic(bArray, bOff, iv, (short) 0, bLen);
-        engine.init(theMode == MODE_ENCRYPT, new ParametersWithIV(((SymmetricKeyImpl) theKey).getParameters(), iv));
+        engine.init(encrypting, parameters(iv));
         state = CipherState.INITIALIZED;
     }
 
@@ -198,6 +202,8 @@ public final class SymmetricCipherImpl extends Cipher {
             return (short) (engine.doFinal(outBuff, outOffset + processed) + processed);
         } catch (InvalidCipherTextException | RuntimeException ex) {
             CryptoException.throwIt(CryptoException.ILLEGAL_USE);
+        } finally {
+            reset();
         }
         return -1;
     }
@@ -224,6 +230,8 @@ public final class SymmetricCipherImpl extends Cipher {
         if (spec.family != key.type) {
             CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
         }
+        this.encrypting = encrypting;
+        this.keyParams = key.getParameters();
 
         BlockCipher modeCipher = spec.mode.wrap(CipherUtils.of(key.type, key.getSize()));
         // A real card's update() flushes every complete block immediately. BouncyCastle's
@@ -240,5 +248,14 @@ public final class SymmetricCipherImpl extends Cipher {
         } else {
             engine = new PaddedBufferedBlockCipher(modeCipher, spec.paddingFactory.get());
         }
+    }
+
+    // Returns every chaining mode to the all-zero IV of init(Key, byte).
+    private void reset() {
+        engine.init(encrypting, parameters(new byte[engine.getBlockSize()]));
+    }
+
+    private CipherParameters parameters(byte[] iv) {
+        return spec.mode == Mode.ECB ? keyParams : new ParametersWithIV(keyParams, iv);
     }
 }

@@ -171,13 +171,35 @@ public class SymmetricCipherImplTest extends SimulatorCoreTest {
     }
 
     @Test
-    public void testAes() {
+    public void testAES() {
         testAESMode(KeyBuilder.LENGTH_AES_128, Cipher.ALG_AES_BLOCK_128_ECB_NOPAD, AES_ECB_128_TEST);
         testAESMode(KeyBuilder.LENGTH_AES_192, Cipher.ALG_AES_BLOCK_128_ECB_NOPAD, AES_ECB_192_TEST);
         testAESMode(KeyBuilder.LENGTH_AES_256, Cipher.ALG_AES_BLOCK_128_ECB_NOPAD, AES_ECB_256_TEST);
         testAESMode(KeyBuilder.LENGTH_AES_128, Cipher.ALG_AES_BLOCK_128_CBC_NOPAD, AES_CBC_128_TEST);
         testAESMode(KeyBuilder.LENGTH_AES_192, Cipher.ALG_AES_BLOCK_128_CBC_NOPAD, AES_CBC_192_TEST);
         testAESMode(KeyBuilder.LENGTH_AES_256, Cipher.ALG_AES_BLOCK_128_CBC_NOPAD, AES_CBC_256_TEST);
+
+        // A rejected doFinal() clears the chaining state
+        AESKey aesKey = (AESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_AES, KeyBuilder.LENGTH_AES_128, false);
+        aesKey.setKey(Hex.decode("000102030405060708090A0B0C0D0E0F"), (short) 0);
+        byte[] iv = Hex.decode("0F0E0D0C0B0A09080706050403020100");
+        byte[] zeros = new byte[16];
+        byte[] out = new byte[16];
+
+        Cipher ecb = Cipher.getInstance(Cipher.ALG_AES_BLOCK_128_ECB_NOPAD, false);
+        ecb.init(aesKey, Cipher.MODE_ENCRYPT);
+        byte[] fromZeroIV = new byte[16];
+        ecb.doFinal(zeros, (short) 0, (short) 16, fromZeroIV, (short) 0);
+
+        Cipher cbc = Cipher.getInstance(Cipher.ALG_AES_BLOCK_128_CBC_NOPAD, false);
+        cbc.init(aesKey, Cipher.MODE_ENCRYPT, iv, (short) 0, (short) iv.length);
+        CryptoException shortBlock = expectThrows(CryptoException.class,
+                () -> cbc.doFinal(zeros, (short) 0, (short) 3, out, (short) 0));
+        // an unpadded algorithm rejects a partial block
+        assertEquals(shortBlock.getReason(), CryptoException.ILLEGAL_USE);
+        cbc.doFinal(zeros, (short) 0, (short) 16, out, (short) 0);
+        // CBC from an all-zero IV equals ECB on the first block
+        assertEquals(out, fromZeroIV);
     }
 
     /**

@@ -3,7 +3,6 @@
 package com.licel.jcardsim.crypto;
 
 import com.licel.jcardsim.crypto.CipherUtils.CipherState;
-import javacard.framework.JCSystem;
 import javacard.framework.Util;
 import javacard.security.CryptoException;
 import javacard.security.Key;
@@ -55,7 +54,6 @@ public final class AuthenticatedSymmetricCipherImpl extends AEADCipher {
     private final CipherAlg spec;
 
     AEADBlockCipher engine;
-    AEADParameters parameters;
 
     CipherState state;
 
@@ -68,6 +66,9 @@ public final class AuthenticatedSymmetricCipherImpl extends AEADCipher {
     // Key and nonce retained from init so the tag can be recomputed from the recovered plaintext on DECRYPT.
     private byte[] keyBytes;
     private byte[] ivBytes;
+    // Nonce and AAD of the last doFinal(), read by verifyTag.
+    private byte[] finishedIv;
+    private byte[] finishedAad;
     // AAD bytes seen during the current operation, the tag produced by an ENCRYPT doFinal, and the
     // plaintext recovered by a DECRYPT doFinal.
     private final ByteArrayOutputStream aadSeen = new ByteArrayOutputStream();
@@ -144,7 +145,7 @@ public final class AuthenticatedSymmetricCipherImpl extends AEADCipher {
         }
 
         selectCipherEngine(theKey);
-        byte[] iv = JCSystem.makeTransientByteArray(bLen, JCSystem.CLEAR_ON_RESET);
+        byte[] iv = new byte[bLen];
         Util.arrayCopyNonAtomic(bArray, bOff, iv, (short) 0, bLen);
         ParametersWithIV parametersWithIV = new ParametersWithIV(((SymmetricKeyImpl) theKey).getParameters(), iv);
         try {
@@ -177,14 +178,14 @@ public final class AuthenticatedSymmetricCipherImpl extends AEADCipher {
 
         selectCipherEngine(theKey);
 
-        byte[] iv_nonce = JCSystem.makeTransientByteArray(nonceLen, JCSystem.CLEAR_ON_RESET);
+        byte[] iv_nonce = new byte[nonceLen];
         Util.arrayCopyNonAtomic(nonceBuf, nonceOff, iv_nonce, (short) 0, nonceLen);
 
         rememberKeyAndIV(theKey, iv_nonce);
-        parameters = new AEADParameters(new KeyParameter(keyBytes), tagSize * Byte.SIZE, iv_nonce);
 
         try {
-            engine.init(theMode == MODE_ENCRYPT, parameters);
+            var params = new AEADParameters(new KeyParameter(keyBytes), tagSize * Byte.SIZE, iv_nonce);
+            engine.init(theMode == MODE_ENCRYPT, params);
         } catch (RuntimeException ex) {
             CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
         }
@@ -241,11 +242,28 @@ public final class AuthenticatedSymmetricCipherImpl extends AEADCipher {
             }
         }
 
-        if (initMode == MODE_DECRYPT) {
-            return decryptFinal(inBuff, inOffset, inLength, outBuff, outOffset);
+        try {
+            if (initMode == MODE_DECRYPT) {
+                return decryptFinal(inBuff, inOffset, inLength, outBuff, outOffset);
+            }
+            return encryptFinal(inBuff, inOffset, inLength, outBuff, outOffset);
+        } finally {
+            reset();
         }
+    }
 
-        return encryptFinal(inBuff, inOffset, inLength, outBuff, outOffset);
+    // BouncyCastle refuses a second encrypt under one key and nonce on one instance.
+    private void reset() {
+        finishedIv = ivBytes;
+        finishedAad = aadSeen.toByteArray();
+        ivBytes = new byte[ivBytes.length];
+        aadSeen.reset();
+        initMsgLen = 0;
+        initAADLen = 0;
+        totalMsgLen = 0;
+        engine = spec.engineFactory.apply(CipherUtils.of(KeyBuilder.TYPE_AES, (short) (keyBytes.length * Byte.SIZE)));
+        var params = new AEADParameters(new KeyParameter(keyBytes), tagBytes * Byte.SIZE, ivBytes);
+        engine.init(initMode == MODE_ENCRYPT, params);
     }
 
     // ENCRYPT: emit only the ciphertext; keep the tag for a later retrieveTag().
@@ -272,7 +290,7 @@ public final class AuthenticatedSymmetricCipherImpl extends AEADCipher {
         try {
             byte[] ciphertext = new byte[inLength];
             Util.arrayCopyNonAtomic(inBuff, inOffset, ciphertext, (short) 0, inLength);
-            byte[] out = aeadEncrypt(ciphertext, new byte[0], 128);
+            byte[] out = aeadEncrypt(ciphertext, ivBytes, new byte[0], 128);
             byte[] plaintext = Arrays.copyOfRange(out, 0, ciphertext.length);
             Util.arrayCopyNonAtomic(plaintext, (short) 0, outBuff, outOffset, (short) plaintext.length);
             recoveredPlaintext = plaintext;
@@ -284,12 +302,10 @@ public final class AuthenticatedSymmetricCipherImpl extends AEADCipher {
         return -1;
     }
 
-    // Run a fresh ENCRYPT engine over the data with the retained key+nonce and given AAD and tag length,
-    // returning ciphertext followed by the authentication tag. BouncyCastle CCM getMac() is unreliable, so
-    // the tag is always taken from the trailing bytes of this output.
-    private byte[] aeadEncrypt(byte[] data, byte[] aad, int macBits) {
+    // Tag is sliced from the output since BouncyCastle CCM getMac() returns the unencrypted CBC-MAC.
+    private byte[] aeadEncrypt(byte[] data, byte[] nonce, byte[] aad, int macBits) {
         AEADBlockCipher fresh = spec.engineFactory.apply(CipherUtils.of(KeyBuilder.TYPE_AES, (short) (keyBytes.length * Byte.SIZE)));
-        fresh.init(true, new AEADParameters(new KeyParameter(keyBytes), macBits, ivBytes, aad));
+        fresh.init(true, new AEADParameters(new KeyParameter(keyBytes), macBits, nonce, aad));
         byte[] scratch = new byte[fresh.getOutputSize(data.length)];
         try {
             int produced = fresh.processBytes(data, 0, data.length, scratch, 0);
@@ -332,7 +348,7 @@ public final class AuthenticatedSymmetricCipherImpl extends AEADCipher {
             CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
         }
 
-        byte[] out = aeadEncrypt(recoveredPlaintext, aadSeen.toByteArray(), requiredTagLen * Byte.SIZE);
+        byte[] out = aeadEncrypt(recoveredPlaintext, finishedIv, finishedAad, requiredTagLen * Byte.SIZE);
         return Arrays.areEqual(out, recoveredPlaintext.length, recoveredPlaintext.length + requiredTagLen,
                 receivedTagBuf, receivedTagOff, receivedTagOff + requiredTagLen);
     }

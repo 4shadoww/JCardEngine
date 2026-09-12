@@ -38,6 +38,9 @@ public final class SymmetricSignatureImpl extends Signature {
     byte algorithm;
     boolean isInitialized;
 
+    // Retained from init() for reset().
+    CipherParameters keyParams;
+
     // Builds the BouncyCastle MAC around the key's own block cipher. HMAC and retail-MAC (ALG3) rows ignore it:
     // HMAC keys carry no block cipher, and retail MAC always runs over a fresh single-DES engine.
     @FunctionalInterface
@@ -109,6 +112,11 @@ public final class SymmetricSignatureImpl extends Signature {
             this.builder = builder;
         }
 
+        // JC 3.2 Signature.init(Key, byte, byte[], short, short): AES-CMAC and HMAC take no IV.
+        boolean takesIV() {
+            return cipher != SIG_CIPHER_AES_CMAC128 && cipher != SIG_CIPHER_HMAC;
+        }
+
         // (messageDigest, cipher, padding) -> entry; null when unrecognised.
         static MacAlg from(byte md, byte cipher, byte padding) {
             for (var a : values()) {
@@ -169,15 +177,17 @@ public final class SymmetricSignatureImpl extends Signature {
         if (spec.family != key.type) {
             CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
         }
-        CipherParameters cipherParams;
-        if (bArray == null) {
-            cipherParams = key.getParameters();
-        } else {
+        keyParams = key.getParameters();
+        CipherParameters cipherParams = keyParams;
+        if (bArray != null) {
+            if (!spec.takesIV()) {
+                CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
+            }
             var probe = CipherUtils.of(key.type, key.getSize());
             if (bLen != probe.getBlockSize()) {
                 CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
             }
-            cipherParams = new ParametersWithIV(key.getParameters(), bArray, bOff, bLen);
+            cipherParams = new ParametersWithIV(keyParams, bArray, bOff, bLen);
         }
         engine = spec.builder.build(key.type, key.getSize());
         engine.init(cipherParams);
@@ -213,10 +223,12 @@ public final class SymmetricSignatureImpl extends Signature {
         if ((algorithm == ALG_DES_MAC8_NOPAD || algorithm == ALG_DES_MAC4_NOPAD) && ((inLength % 8) != 0)) {
             CryptoException.throwIt(CryptoException.ILLEGAL_USE);
         }
-        engine.update(inBuff, inOffset, inLength);
-        var processedBytes = (short) engine.doFinal(sigBuff, sigOffset);
-        engine.reset();
-        return processedBytes;
+        try {
+            engine.update(inBuff, inOffset, inLength);
+            return (short) engine.doFinal(sigBuff, sigOffset);
+        } finally {
+            reset();
+        }
     }
 
     @Override
@@ -227,14 +239,22 @@ public final class SymmetricSignatureImpl extends Signature {
         if ((algorithm == ALG_DES_MAC8_NOPAD || algorithm == ALG_DES_MAC4_NOPAD) && ((inLength % 8) != 0)) {
             CryptoException.throwIt(CryptoException.ILLEGAL_USE);
         }
-        engine.update(inBuff, inOffset, inLength);
-        var sig = new byte[getLength()];
-        engine.doFinal(sig, (short) 0);
-        engine.reset();
-        if (sigLength != (short) sig.length) {
-            return false;
+        try {
+            engine.update(inBuff, inOffset, inLength);
+            var sig = new byte[getLength()];
+            engine.doFinal(sig, (short) 0);
+            if (sigLength != (short) sig.length) {
+                return false;
+            }
+            return Util.arrayCompare(sig, (short) 0, sigBuff, sigOffset, (short) sig.length) == 0;
+        } finally {
+            reset();
         }
-        return Util.arrayCompare(sig, (short) 0, sigBuff, sigOffset, (short) sig.length) == 0;
+    }
+
+    // Returns CBC-based MACs to the all-zero IV of init(Key, byte).
+    private void reset() {
+        engine.init(keyParams);
     }
 
     @Override
