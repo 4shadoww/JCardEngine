@@ -11,6 +11,7 @@ import apdu4j.prefs.Preferences;
 import com.licel.jcardsim.base.Simulator;
 import javacard.framework.AID;
 import javacard.framework.Applet;
+import pro.javacard.engine.core.Feature;
 import pro.javacard.engine.faulty.FaultyConfig;
 import pro.javacard.engine.globalplatform.GlobalPlatformEngine;
 import pro.javacard.engine.globalplatform.SCPConfig;
@@ -28,6 +29,8 @@ public interface JavaCardEngine {
 
     // Regex searched in each traced comment line; only matching lines are logged, unset is silent.
     Preference.Parameter<String> TRACE_FILTER = Preference.parameter("jcardengine.trace.filter", String.class, false);
+
+    Preference.Default<Boolean> CALLCOUNT = Preference.of("jcardengine.callcount", Boolean.class, false, false);
 
     AID installApplet(AID aid, Class<? extends Applet> appletClass, byte[] parameters);
 
@@ -122,7 +125,8 @@ public interface JavaCardEngine {
             var gp = new GlobalPlatformEngine(scpConfig);
             Long seed = preferences.valueOf(RNG_SEED).orElse(null);
             Pattern trace = preferences.valueOf(TRACE_FILTER).map(Pattern::compile).orElse(null);
-            var sim = new Simulator(classLoader, faultConfig, gp, seed, trace, Set.of());
+            var features = preferences.get(CALLCOUNT) ? Set.of(Feature.CALLCOUNT) : Set.<Feature>of();
+            var sim = new Simulator(classLoader, faultConfig, gp, seed, trace, features);
             var scope = sim.asCurrent();
             try (scope) {
                 // Constructors use JCSystem so we need the "current" reference

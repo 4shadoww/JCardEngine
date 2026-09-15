@@ -3,5 +3,7 @@
 package pro.javacard.engine.core;
 
 public enum Feature {
-    TRACE
+    TRACE,
+    CALLCOUNT,
+    FAULTY
 }

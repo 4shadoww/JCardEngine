@@ -112,6 +112,8 @@ public class Simulator implements JavaCardEngine, JavaCardRuntime {
     // Regex over the recorded comment lines; null loads applet classes without the trace calls
     private final Pattern trace;
 
+    private final Map<String, Integer> callcount;
+
     public Simulator(ClassLoader loader, FaultyConfig faultConfig, GlobalPlatformEngine globalPlatform, Long seed, Pattern trace, Set<Feature> features) {
         this.transientMemory = new TransientMemory();
         this.globalPlatform = globalPlatform;
@@ -121,10 +123,14 @@ public class Simulator implements JavaCardEngine, JavaCardRuntime {
         if (trace != null) {
             loaderFeatures.add(Feature.TRACE);
         }
+        if (faultConfig != null) {
+            loaderFeatures.add(Feature.FAULTY);
+        }
         this.classLoader = new IsolatingClassReloader(loader, loaderFeatures);
         this.faultConfig = faultConfig;
         this.rng = seed == null ? new SecureRandom() : new DeterministicRandom(seed);
         this.trace = trace;
+        this.callcount = features.contains(Feature.CALLCOUNT) ? new HashMap<>() : null;
     }
 
     public Simulator(ClassLoader loader, FaultyConfig faultConfig, GlobalPlatformEngine globalPlatform) {
@@ -257,6 +263,13 @@ public class Simulator implements JavaCardEngine, JavaCardRuntime {
         if (current != null && current.trace.matcher(line).find()) {
             tracelog.info(line);
         }
+    }
+
+    private static final Logger callcountlog = LoggerFactory.getLogger("pro.javacard.engine.callcount");
+
+    @SuppressWarnings("unused") // used from intercept
+    public static void callcount(String method) {
+        currentSimulator.get().callcount.merge(method, 1, Integer::sum);
     }
 
     @SuppressWarnings("unused") // used from intercept
@@ -638,6 +651,15 @@ public class Simulator implements JavaCardEngine, JavaCardRuntime {
             }
 
             return response;
+        } finally {
+            if (callcount != null && !callcount.isEmpty()) {
+                var report = new StringBuilder();
+                callcount.entrySet().stream()
+                        .sorted(Map.Entry.<String, Integer>comparingByValue().reversed().thenComparing(Map.Entry.comparingByKey()))
+                        .forEach(e -> report.append(String.format("%n%6d %s", e.getValue(), e.getKey())));
+                callcountlog.info("calls:{}", report);
+                callcount.clear();
+            }
         }
     }
 

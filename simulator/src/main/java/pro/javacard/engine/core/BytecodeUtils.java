@@ -12,21 +12,26 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
-import java.util.EnumSet;
 import java.util.HashSet;
 
 public final class BytecodeUtils {
     private static final Logger log = LoggerFactory.getLogger(BytecodeUtils.class);
 
-    public static byte[] transform(byte[] classBytes, ClassLoader classLoader, EnumSet<Feature> features) {
+    public static byte[] transform(byte[] classBytes, IsolatingClassReloader loader) {
         ClassReader classReader = new ClassReader(classBytes);
-        ClassWriter classWriter = new CustomClassWriter(classReader, ClassWriter.COMPUTE_MAXS | ClassWriter.COMPUTE_FRAMES, classLoader);
+        ClassWriter classWriter = new CustomClassWriter(classReader, ClassWriter.COMPUTE_MAXS | ClassWriter.COMPUTE_FRAMES, loader);
 
         ClassVisitor chain = new MemoryAllocationInterceptor(classWriter);
-        if (features.contains(Feature.TRACE)) {
+        if (loader.features.contains(Feature.TRACE)) {
             chain = new CommentTraceInterceptor(chain);
         }
-        classReader.accept(new FaultInjectionInterceptor(chain), new Attribute[]{CommentTraceAttribute.PROTOTYPE}, 0);
+        if (loader.features.contains(Feature.FAULTY)) {
+            chain = new FaultInjectionInterceptor(chain);
+        }
+        if (loader.features.contains(Feature.CALLCOUNT)) {
+            chain = new CallCountInterceptor(chain, loader);
+        }
+        classReader.accept(chain, new Attribute[]{CommentTraceAttribute.PROTOTYPE}, 0);
 
         return classWriter.toByteArray();
     }
@@ -69,14 +74,18 @@ public final class BytecodeUtils {
             if ("java/lang/Object".equals(type)) {
                 return null;
             }
-            try (InputStream is = classLoader.getResourceAsStream(type + ".class")) {
-                if (is == null) {
-                    throw new TypeNotPresentException(type.replace('/', '.'), null);
-                }
-                return new ClassReader(is).getSuperName();
-            } catch (IOException e) {
-                throw new UncheckedIOException(e);
+            return reader(classLoader, type).getSuperName();
+        }
+    }
+
+    static ClassReader reader(ClassLoader classLoader, String type) {
+        try (InputStream is = classLoader.getResourceAsStream(type + ".class")) {
+            if (is == null) {
+                throw new TypeNotPresentException(type.replace('/', '.'), null);
             }
+            return new ClassReader(is);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
         }
     }
 }

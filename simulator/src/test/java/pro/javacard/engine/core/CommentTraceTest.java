@@ -31,6 +31,8 @@ public class CommentTraceTest {
     private static final String AID_HEX = "D23300000077" + "4D454D2D3031" + "01";
     private static final Pattern TRACE = Pattern.compile("MemoryApplet\\.java:\\d+ (//.*)$");
     private static final String UNPROCESSED = "No CommentTrace attribute";
+    private static final Pattern CALLCOUNT = Pattern.compile("callcount - calls:$");
+    private static final Pattern CALLED = Pattern.compile("^ +(\\d+) \\S+$");
 
     private static List<String> stderr(Runnable body) {
         var buf = new ByteArrayOutputStream();
@@ -63,6 +65,28 @@ public class CommentTraceTest {
 
     private static List<String> traced(List<String> log) {
         return log.stream().map(TRACE::matcher).filter(Matcher::find).map(m -> m.group(1)).toList();
+    }
+
+    @Test
+    public void callCountsPerApdu() {
+        assertFalse(run(Preferences.of()).stream().anyMatch(l -> CALLCOUNT.matcher(l).find()));
+
+        List<List<String>> reports = new ArrayList<>();
+        for (String line : run(Preferences.of(JavaCardEngine.CALLCOUNT, true))) {
+            if (CALLCOUNT.matcher(line).find()) {
+                reports.add(new ArrayList<>());
+            } else if (!reports.isEmpty() && CALLED.matcher(line).matches()) {
+                reports.get(reports.size() - 1).add(line.trim());
+            }
+        }
+        assertEquals(reports.size(), 6);
+        for (List<String> r : reports) {
+            List<Integer> counts = r.stream().map(l -> Integer.valueOf(l.substring(0, l.indexOf(' ')))).toList();
+            assertEquals(counts, counts.stream().sorted(Comparator.reverseOrder()).toList(), r.toString());
+            assertTrue(r.contains("1 MemoryApplet.process(APDU)"), r.toString());
+            assertTrue(r.contains("1 Applet.selectingApplet()"), r.toString());
+        }
+        assertTrue(reports.stream().anyMatch(r -> !r.get(0).startsWith("1 ")), reports.toString());
     }
 
     @Test
@@ -110,7 +134,7 @@ public class CommentTraceTest {
 
         // A class that never went through the trace step is reported when a filter asks for the calls
         byte[] plain = Files.readAllBytes(Path.of("target/classes/pro/javacard/engine/core/CommentTraceAttribute$Line.class"));
-        log = stderr(() -> BytecodeUtils.transform(plain, getClass().getClassLoader(), EnumSet.of(Feature.TRACE)));
+        log = stderr(() -> BytecodeUtils.transform(plain, new IsolatingClassReloader(getClass().getClassLoader(), EnumSet.of(Feature.TRACE))));
         assertTrue(log.stream().anyMatch(l -> l.contains(UNPROCESSED + ", class not built with the trace goal: pro/javacard/engine/core/CommentTraceAttribute$Line")), log.toString());
 
         // Instrumenting the already instrumented test classes again changes nothing; the comment javac compiled away is reported

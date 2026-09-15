@@ -6,7 +6,7 @@ import apdu4j.core.BIBO;
 import apdu4j.core.GetResponseWrapper;
 import apdu4j.core.HexUtils;
 import apdu4j.pcsc.CardBIBO;
-import com.licel.jcardsim.base.Simulator;
+import pro.javacard.engine.JavaCardEngine;
 import com.licel.jcardsim.utils.AIDUtil;
 
 import javacard.security.KeyAgreement;
@@ -105,7 +105,7 @@ public class CryptoParityTest {
 
     @Test
     public void jcardengine() {
-        var sim = new Simulator();
+        var sim = new JavaCardEngine.Builder().build();
         sim.installApplet(AIDUtil.create(AID), CryptoProbeApplet.class);
         try (BIBO bibo = sim.connect()) {
             run(bibo);

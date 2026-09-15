@@ -22,7 +22,7 @@ public final class IsolatingClassReloader extends SecureClassLoader {
     private static final Logger log = LoggerFactory.getLogger(IsolatingClassReloader.class);
 
     private final Set<String> isolated = new HashSet<>();
-    private final EnumSet<Feature> features;
+    final EnumSet<Feature> features;
 
     public Class<?> reloadAndIsolate(Class<?> clazz) throws ClassNotFoundException {
         // Add package to isolated list
@@ -37,11 +37,15 @@ public final class IsolatingClassReloader extends SecureClassLoader {
         this.features = EnumSet.copyOf(features);
     }
 
+    boolean isolates(String type) {
+        return isolated.contains(pkgname(type.replace('/', '.')));
+    }
+
     @Override
     protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
         log.trace("Loading class {}", name);
         // Force reload of target classes instead of delegating to parent
-        if (isolated.contains(pkgname(name))) {
+        if (isolates(name)) {
             Class<?> clazz = findLoadedClass(name);
             if (clazz == null) {
                 log.trace("{} isolating {}", System.identityHashCode(this), name);
@@ -86,7 +90,7 @@ public final class IsolatingClassReloader extends SecureClassLoader {
             }
             log.trace("Transforming {}", name);
             // Transform the class to intercept byte array allocations
-            byte[] transformedBytes = BytecodeUtils.transform(classBytes, this, features);
+            byte[] transformedBytes = BytecodeUtils.transform(classBytes, this);
             return defineClass(name, transformedBytes, 0, transformedBytes.length, orig.getProtectionDomain());
         } catch (Exception e) {
             throw new ClassNotFoundException("Failed to load and transform class: " + name, e);
