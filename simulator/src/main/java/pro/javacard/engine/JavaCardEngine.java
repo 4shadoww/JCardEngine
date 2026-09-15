@@ -17,6 +17,7 @@ import pro.javacard.engine.globalplatform.SCPConfig;
 
 import javax.smartcardio.TerminalFactory;
 import java.time.Duration;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 // External programmer-facing interface: install/delete applets and open APDU (BIBO) sessions.
@@ -121,7 +122,7 @@ public interface JavaCardEngine {
             var gp = new GlobalPlatformEngine(scpConfig);
             Long seed = preferences.valueOf(RNG_SEED).orElse(null);
             Pattern trace = preferences.valueOf(TRACE_FILTER).map(Pattern::compile).orElse(null);
-            var sim = new Simulator(classLoader, faultConfig, gp, seed, trace);
+            var sim = new Simulator(classLoader, faultConfig, gp, seed, trace, Set.of());
             var scope = sim.asCurrent();
             try (scope) {
                 // Constructors use JCSystem so we need the "current" reference

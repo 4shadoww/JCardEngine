@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.SecureClassLoader;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -21,7 +22,7 @@ public final class IsolatingClassReloader extends SecureClassLoader {
     private static final Logger log = LoggerFactory.getLogger(IsolatingClassReloader.class);
 
     private final Set<String> isolated = new HashSet<>();
-    private final boolean trace;
+    private final EnumSet<Feature> features;
 
     public Class<?> reloadAndIsolate(Class<?> clazz) throws ClassNotFoundException {
         // Add package to isolated list
@@ -31,9 +32,9 @@ public final class IsolatingClassReloader extends SecureClassLoader {
         return loadClass(clazz.getName(), false);
     }
 
-    public IsolatingClassReloader(ClassLoader parent, boolean trace) {
+    public IsolatingClassReloader(ClassLoader parent, EnumSet<Feature> features) {
         super("isolating", parent);
-        this.trace = trace;
+        this.features = EnumSet.copyOf(features);
     }
 
     @Override
@@ -85,7 +86,7 @@ public final class IsolatingClassReloader extends SecureClassLoader {
             }
             log.trace("Transforming {}", name);
             // Transform the class to intercept byte array allocations
-            byte[] transformedBytes = BytecodeUtils.transform(classBytes, this, trace);
+            byte[] transformedBytes = BytecodeUtils.transform(classBytes, this, features);
             return defineClass(name, transformedBytes, 0, transformedBytes.length, orig.getProtectionDomain());
         } catch (Exception e) {
             throw new ClassNotFoundException("Failed to load and transform class: " + name, e);

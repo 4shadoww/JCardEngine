@@ -19,6 +19,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -109,7 +110,7 @@ public class CommentTraceTest {
 
         // A class that never went through the trace step is reported when a filter asks for the calls
         byte[] plain = Files.readAllBytes(Path.of("target/classes/pro/javacard/engine/core/CommentTraceAttribute$Line.class"));
-        log = stderr(() -> BytecodeUtils.transform(plain, getClass().getClassLoader(), true));
+        log = stderr(() -> BytecodeUtils.transform(plain, getClass().getClassLoader(), EnumSet.of(Feature.TRACE)));
         assertTrue(log.stream().anyMatch(l -> l.contains(UNPROCESSED + ", class not built with the trace goal: pro/javacard/engine/core/CommentTraceAttribute$Line")), log.toString());
 
         // Instrumenting the already instrumented test classes again changes nothing; the comment javac compiled away is reported

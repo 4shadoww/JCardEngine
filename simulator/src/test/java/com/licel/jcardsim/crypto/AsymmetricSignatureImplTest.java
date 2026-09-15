@@ -15,6 +15,8 @@ import org.testng.annotations.Test;
 import pro.javacard.engine.globalplatform.GlobalPlatformEngine;
 import pro.javacard.engine.globalplatform.SCPConfig;
 
+import java.util.Set;
+
 import static org.testng.Assert.*;
 
 /**
@@ -141,7 +143,7 @@ public class AsymmetricSignatureImplTest extends SimulatorCoreTest {
         // Raw ECDSA (ALG_NULL): sign a 32-byte hash directly, no internal digesting.
         Simulator base = (Simulator) Simulator.current();
         Simulator seeded = new Simulator(getClass().getClassLoader(), null,
-                new GlobalPlatformEngine(SCPConfig.defaultConfig()), 42L, null);
+                new GlobalPlatformEngine(SCPConfig.defaultConfig()), 42L, null, Set.of());
         var scope = seeded.asCurrent();
         try (scope) {
             KeyPair kp = new KeyPair(KeyPair.ALG_EC_FP, (short) 256);
@@ -348,7 +350,7 @@ public class AsymmetricSignatureImplTest extends SimulatorCoreTest {
         // sign pad, so the DER is the full 137-byte long form, which fits getLength().
         Simulator base = (Simulator) Simulator.current();
         Simulator seeded = new Simulator(getClass().getClassLoader(), null,
-                new GlobalPlatformEngine(SCPConfig.defaultConfig()), 8L, null);
+                new GlobalPlatformEngine(SCPConfig.defaultConfig()), 8L, null, Set.of());
         var scope = seeded.asCurrent();
         try (scope) {
             KeyPair kp = new KeyPair(KeyPair.ALG_EC_FP, (short) 512);

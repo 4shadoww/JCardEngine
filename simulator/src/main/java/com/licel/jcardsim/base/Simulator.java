@@ -17,6 +17,7 @@ import pro.javacard.engine.JavaCardEngineException;
 import pro.javacard.engine.core.ContextStackProxy;
 import pro.javacard.engine.core.DependencyAnalyzer;
 import pro.javacard.engine.core.Faulty;
+import pro.javacard.engine.core.Feature;
 import pro.javacard.engine.core.IsolatingClassReloader;
 import pro.javacard.engine.faulty.FaultyConfig;
 import pro.javacard.engine.globalplatform.CLState;
@@ -111,18 +112,23 @@ public class Simulator implements JavaCardEngine, JavaCardRuntime {
     // Regex over the recorded comment lines; null loads applet classes without the trace calls
     private final Pattern trace;
 
-    public Simulator(ClassLoader loader, FaultyConfig faultConfig, GlobalPlatformEngine globalPlatform, Long seed, Pattern trace) {
+    public Simulator(ClassLoader loader, FaultyConfig faultConfig, GlobalPlatformEngine globalPlatform, Long seed, Pattern trace, Set<Feature> features) {
         this.transientMemory = new TransientMemory();
         this.globalPlatform = globalPlatform;
         this.currentAPDU = new CurrentAPDU(transientMemory);
-        this.classLoader = new IsolatingClassReloader(loader, trace != null);
+        var loaderFeatures = EnumSet.noneOf(Feature.class);
+        loaderFeatures.addAll(features);
+        if (trace != null) {
+            loaderFeatures.add(Feature.TRACE);
+        }
+        this.classLoader = new IsolatingClassReloader(loader, loaderFeatures);
         this.faultConfig = faultConfig;
         this.rng = seed == null ? new SecureRandom() : new DeterministicRandom(seed);
         this.trace = trace;
     }
 
     public Simulator(ClassLoader loader, FaultyConfig faultConfig, GlobalPlatformEngine globalPlatform) {
-        this(loader, faultConfig, globalPlatform, null, null);
+        this(loader, faultConfig, globalPlatform, null, null, Set.of());
     }
 
     public Simulator(ClassLoader loader, FaultyConfig faultConfig) {

@@ -12,18 +12,18 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.util.EnumSet;
 import java.util.HashSet;
 
 public final class BytecodeUtils {
     private static final Logger log = LoggerFactory.getLogger(BytecodeUtils.class);
 
-    // trace injects the CommentTrace calls; without it the attribute passes through untouched
-    public static byte[] transform(byte[] classBytes, ClassLoader classLoader, boolean trace) {
+    public static byte[] transform(byte[] classBytes, ClassLoader classLoader, EnumSet<Feature> features) {
         ClassReader classReader = new ClassReader(classBytes);
         ClassWriter classWriter = new CustomClassWriter(classReader, ClassWriter.COMPUTE_MAXS | ClassWriter.COMPUTE_FRAMES, classLoader);
 
         ClassVisitor chain = new MemoryAllocationInterceptor(classWriter);
-        if (trace) {
+        if (features.contains(Feature.TRACE)) {
             chain = new CommentTraceInterceptor(chain);
         }
         classReader.accept(new FaultInjectionInterceptor(chain), new Attribute[]{CommentTraceAttribute.PROTOTYPE}, 0);
