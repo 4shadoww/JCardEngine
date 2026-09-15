@@ -5,7 +5,7 @@
     <parent>
         <groupId>pro.javacard</groupId>
         <artifactId>jcardengine-package</artifactId>
-        <version>26.09.02-SNAPSHOT</version>
+        <version>26.09.15-SNAPSHOT</version>
     </parent>
     <artifactId>jcardengine</artifactId>
     <name>JCardEngine - JavaCard Simulator</name>
@@ -66,7 +66,7 @@
         <dependency>
             <groupId>net.bytebuddy</groupId>
             <artifactId>byte-buddy</artifactId>
-            <version>1.18.13</version>
+            <version>1.18.14</version>
         </dependency>
         <!-- ASM for bytecode processing -->
         <dependency>
