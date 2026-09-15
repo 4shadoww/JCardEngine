@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.licel.jcardsim.crypto;
 
+import apdu4j.prefs.Preferences;
 import com.licel.jcardsim.SimulatorCoreTest;
 import com.licel.jcardsim.base.Simulator;
 import javacard.framework.JCSystem;
@@ -12,10 +13,7 @@ import org.bouncycastle.asn1.x9.X9ECParameters;
 import org.bouncycastle.crypto.params.ECDomainParameters;
 import org.bouncycastle.util.encoders.Hex;
 import org.testng.annotations.Test;
-import pro.javacard.engine.globalplatform.GlobalPlatformEngine;
-import pro.javacard.engine.globalplatform.SCPConfig;
-
-import java.util.Set;
+import pro.javacard.engine.JavaCardEngine;
 
 import static org.testng.Assert.*;
 
@@ -142,8 +140,7 @@ public class AsymmetricSignatureImplTest extends SimulatorCoreTest {
 
         // Raw ECDSA (ALG_NULL): sign a 32-byte hash directly, no internal digesting.
         Simulator base = (Simulator) Simulator.current();
-        Simulator seeded = new Simulator(getClass().getClassLoader(), null,
-                new GlobalPlatformEngine(SCPConfig.defaultConfig()), 42L, null, Set.of());
+        Simulator seeded = (Simulator) new JavaCardEngine.Builder().preferences(Preferences.of(JavaCardEngine.RNG_SEED, 42L)).build();
         var scope = seeded.asCurrent();
         try (scope) {
             KeyPair kp = new KeyPair(KeyPair.ALG_EC_FP, (short) 256);
@@ -349,8 +346,7 @@ public class AsymmetricSignatureImplTest extends SimulatorCoreTest {
         // Seed 8 deterministically yields a brainpoolP512r1 signature where both r and s carry a 0x00
         // sign pad, so the DER is the full 137-byte long form, which fits getLength().
         Simulator base = (Simulator) Simulator.current();
-        Simulator seeded = new Simulator(getClass().getClassLoader(), null,
-                new GlobalPlatformEngine(SCPConfig.defaultConfig()), 8L, null, Set.of());
+        Simulator seeded = (Simulator) new JavaCardEngine.Builder().preferences(Preferences.of(JavaCardEngine.RNG_SEED, 8L)).build();
         var scope = seeded.asCurrent();
         try (scope) {
             KeyPair kp = new KeyPair(KeyPair.ALG_EC_FP, (short) 512);

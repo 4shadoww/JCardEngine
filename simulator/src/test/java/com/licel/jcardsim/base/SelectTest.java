@@ -9,6 +9,7 @@ import com.licel.jcardsim.utils.AIDUtil;
 import javacard.framework.*;
 import org.bouncycastle.util.encoders.Hex;
 import org.testng.annotations.Test;
+import pro.javacard.engine.JavaCardEngine;
 import pro.javacard.engine.testapplets.GlobalPlatformTestApplet;
 
 import java.util.Arrays;
@@ -92,12 +93,12 @@ public class SelectTest {
         assertEquals(input, expected);
     }
 
-    private Simulator prepareSimulator() {
+    private JavaCardEngine prepareSimulator() {
         AID aid0 = AIDUtil.create("010203040506070809");
         AID aid1 = AIDUtil.create("d0000cafe00001");
         AID aid2 = AIDUtil.create("d0000cafe00002");
 
-        Simulator simulator = new Simulator();
+        JavaCardEngine simulator = JavaCardEngine.create();
         simulator.installApplet(aid0, MultiInstanceApplet.class);
         simulator.installApplet(aid2, MultiInstanceApplet.class);
         simulator.installApplet(aid1, MultiInstanceApplet.class);
@@ -106,7 +107,7 @@ public class SelectTest {
 
     @Test
     public void testPartialSelectWorks1() {
-        Simulator simulator = prepareSimulator();
+        JavaCardEngine simulator = prepareSimulator();
 
         try (var bibo = simulator.connect()) {
             // should select d0000cafe00001
@@ -134,7 +135,7 @@ public class SelectTest {
         AID cc = AIDUtil.create("d0000cafe000cc");
         AID other = AIDUtil.create("e000000000");
 
-        Simulator simulator = new Simulator();
+        JavaCardEngine simulator = JavaCardEngine.create();
         simulator.installApplet(aa, MultiInstanceApplet.class);
         simulator.installApplet(bb, GlobalPlatformTestApplet.class);
         simulator.installApplet(cc, MultiInstanceApplet.class);
@@ -166,7 +167,7 @@ public class SelectTest {
 
     @Test
     public void testSelectSearchesOnAValidAidOnly() {
-        Simulator simulator = prepareSimulator();
+        JavaCardEngine simulator = prepareSimulator();
 
         try (var bibo = simulator.connect()) {
             // Shorter than an ISO 7816-5 RID: no AID matches, so the SELECT is dispatched to the ISD
@@ -183,7 +184,7 @@ public class SelectTest {
     public void testEmptySelectWorks() {
         // GPC v2.3.1 6.3: empty-AID SELECT (case 1/2) selects the default application - the ISD, which
         // every card is now born with - so it answers with its FCI and 9000, not "not found".
-        Simulator simulator = prepareSimulator();
+        JavaCardEngine simulator = prepareSimulator();
         try (var bibo = simulator.connect()) {
             var actual = bibo.transmit(new CommandAPDU(0x00, ISO7816.INS_SELECT, 0x04, 0x00));
             assertEquals(actual.getSW(), 0x9000);
@@ -194,14 +195,16 @@ public class SelectTest {
     public void testCanNotSelectUnselectableApplet() {
         AID refusing = AIDUtil.create("010203040506070809");
         AID accepting = AIDUtil.create("010203040506070810");
-        Simulator simulator = new Simulator();
+        JavaCardEngine simulator = JavaCardEngine.create();
         simulator.installExposedApplet(refusing, UnselectableApplet.class);
         simulator.installApplet(accepting, MultiInstanceApplet.class);
 
-        byte[] result = simulator.transceive(AIDUtil.selectBytes(refusing));
-        assertEquals(result.length, 2);
-        assertEquals(Util.getShort(result, (short) 0), ISO7816.SW_APPLET_SELECT_FAILED);
-        assertTrue(UnselectableApplet.selectedCalled);
+        try (var bibo = simulator.connect()) {
+            byte[] result = bibo.transceive(AIDUtil.selectBytes(refusing));
+            assertEquals(result.length, 2);
+            assertEquals(Util.getShort(result, (short) 0), ISO7816.SW_APPLET_SELECT_FAILED);
+            assertTrue(UnselectableApplet.selectedCalled);
+        }
 
         try (var bibo = simulator.connect()) {
             // GPC v2.3.1 6.4.2.1.2: a refused match does not end the search. Both applets match the prefix,
@@ -218,7 +221,7 @@ public class SelectTest {
     @Test
     public void testSelectWithLeakedTransactionFails() {
         AID aid = AIDUtil.create("d0000cafe00099");
-        Simulator simulator = new Simulator();
+        JavaCardEngine simulator = JavaCardEngine.create();
         simulator.installExposedApplet(aid, TransactionLeakingApplet.class);
 
         try (var bibo = simulator.connect()) {
@@ -233,7 +236,7 @@ public class SelectTest {
     @Test
     public void testHostSelectWithLeakedTransactionFails() {
         AID aid = AIDUtil.create("d0000cafe00099");
-        Simulator simulator = new Simulator();
+        JavaCardEngine simulator = JavaCardEngine.create();
         simulator.installExposedApplet(aid, TransactionLeakingApplet.class);
 
         try (var bibo = simulator.connect()) {
@@ -250,7 +253,7 @@ public class SelectTest {
         AID good = AIDUtil.create("d0000cafe00001");
         AID bad = AIDUtil.create("d0000cafe09999");
 
-        Simulator simulator = new Simulator();
+        JavaCardEngine simulator = JavaCardEngine.create();
         simulator.installApplet(good, MultiInstanceApplet.class);
 
         try (var bibo = simulator.connect()) {

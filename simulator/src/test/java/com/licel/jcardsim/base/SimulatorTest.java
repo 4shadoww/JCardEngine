@@ -29,7 +29,7 @@ public class SimulatorTest {
     @Test
     public void testCreateApplet() {
         System.out.println("createApplet");
-        Simulator instance = new Simulator();
+        JavaCardEngine instance = JavaCardEngine.create();
         assertEquals(instance.installApplet(TEST_APPLET_AID, TEST_APPLET_CLASS, createData), TEST_APPLET_AID);
     }
 
@@ -39,7 +39,7 @@ public class SimulatorTest {
     @Test
     public void testInstallApplet_AID_Class() {
         System.out.println("installApplet");
-        Simulator instance = new Simulator();
+        JavaCardEngine instance = JavaCardEngine.create();
         instance.installApplet(TEST_APPLET_AID, TEST_APPLET_CLASS);
         try (var bibo = instance.connect()) {
             assertEquals(bibo.transmit(AIDUtil.select(TEST_APPLET_AID)).getSW(), 0x9000);
@@ -48,7 +48,7 @@ public class SimulatorTest {
 
     @Test
     public void testNopWithLengthExtensionsFails() {
-        Simulator instance = new Simulator();
+        JavaCardEngine instance = JavaCardEngine.create();
         instance.installApplet(TEST_APPLET_AID, TEST_APPLET_CLASS);
         try (var bibo = instance.connect()) {
             bibo.transmit(AIDUtil.select(TEST_APPLET_AID));
@@ -69,7 +69,7 @@ public class SimulatorTest {
      */
     @Test
     public void testTransmitCommand() {
-        Simulator instance = new Simulator();
+        JavaCardEngine instance = JavaCardEngine.create();
         instance.installApplet(TEST_APPLET_AID, TEST_APPLET_CLASS);
         try (var bibo = instance.connect()) {
             var sel = bibo.transmit(AIDUtil.select(TEST_APPLET_AID));
@@ -85,7 +85,7 @@ public class SimulatorTest {
      */
     @Test
     public void testReset() {
-        Simulator instance = new Simulator();
+        JavaCardEngine instance = JavaCardEngine.create();
         instance.installApplet(TEST_APPLET_AID, TEST_APPLET_CLASS);
         instance.connect("*", true).close();
         // installed applets survive a power cycle
@@ -100,8 +100,8 @@ public class SimulatorTest {
     @Test
     public void testSelectAppletWith2Simulators() {
         System.out.println("selectAppletWith2Simulators");
-        Simulator instance1 = new Simulator();
-        Simulator instance2 = new Simulator();
+        JavaCardEngine instance1 = JavaCardEngine.create();
+        JavaCardEngine instance2 = JavaCardEngine.create();
 
         instance1.installApplet(TEST_APPLET_AID, TEST_APPLET_CLASS);
         // present only on instance1
@@ -151,7 +151,7 @@ public class SimulatorTest {
         final byte CLA = (byte) 0x01;
         final byte INS = (byte) 0x02;
 
-        Simulator instance = new Simulator();
+        JavaCardEngine instance = JavaCardEngine.create();
 
         AID appletAID = AIDUtil.create(APPLET_AID_BYTES);
         instance.installApplet(appletAID, APPLET_CLASS);
@@ -174,7 +174,7 @@ public class SimulatorTest {
         }
 
         // Try with base SimulatorRuntime
-        instance = new Simulator();
+        instance = JavaCardEngine.create();
 
         appletAID = AIDUtil.create(APPLET_AID_BYTES);
         instance.installApplet(appletAID, APPLET_CLASS);
@@ -191,7 +191,7 @@ public class SimulatorTest {
 
     @Test
     public void testManageChannelRejected() {
-        Simulator instance = new Simulator();
+        JavaCardEngine instance = JavaCardEngine.create();
         instance.installApplet(TEST_APPLET_AID, TEST_APPLET_CLASS);
 
         try (var bibo = instance.connect()) {

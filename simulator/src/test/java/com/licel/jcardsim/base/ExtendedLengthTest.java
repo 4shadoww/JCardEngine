@@ -10,6 +10,7 @@ import com.licel.jcardsim.utils.AIDUtil;
 import javacard.framework.AID;
 import org.bouncycastle.util.encoders.Hex;
 import org.testng.annotations.Test;
+import pro.javacard.engine.JavaCardEngine;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -30,8 +31,8 @@ public class ExtendedLengthTest {
     private static final AID TEST_APPLET_AID = new AID(TEST_APPLET_AID_BYTES, (short) 0, (byte) TEST_APPLET_AID_BYTES.length);
 
 
-    private Simulator prepareSimulator() {
-        Simulator instance = new Simulator();
+    private JavaCardEngine prepareSimulator() {
+        JavaCardEngine instance = JavaCardEngine.create();
         instance.installApplet(TEST_APPLET_AID, Sha1Applet.class);
         return instance;
     }
@@ -41,7 +42,7 @@ public class ExtendedLengthTest {
         MessageDigest sha1 = MessageDigest.getInstance("SHA1");
         byte[] expectedOutput = sha1.digest(new byte[]{DUMMY});
 
-        Simulator instance = prepareSimulator();
+        JavaCardEngine instance = prepareSimulator();
 
         try (var bibo = instance.connect()) {
             var sel = bibo.transmit(AIDUtil.select(TEST_APPLET_AID));
@@ -59,7 +60,7 @@ public class ExtendedLengthTest {
         byte le = (byte) 0xA0;
         byte[] expectedOutput = new byte[]{0, lc, 0, le};
 
-        Simulator instance = prepareSimulator();
+        JavaCardEngine instance = prepareSimulator();
 
         try (var bibo = instance.connect()) {
             var sel = bibo.transmit(AIDUtil.select(TEST_APPLET_AID));
@@ -77,7 +78,7 @@ public class ExtendedLengthTest {
         byte le = (byte) 0x4;
         byte[] expectedOutput = new byte[]{0, 0, 0, le};
 
-        Simulator instance = prepareSimulator();
+        JavaCardEngine instance = prepareSimulator();
 
         try (var bibo = instance.connect()) {
             var sel = bibo.transmit(AIDUtil.select(TEST_APPLET_AID));
@@ -94,7 +95,7 @@ public class ExtendedLengthTest {
     public void testRegularApduEcho() throws NoSuchAlgorithmException {
         byte[] expectedOutput = new byte[]{DUMMY};
 
-        Simulator instance = prepareSimulator();
+        JavaCardEngine instance = prepareSimulator();
 
         try (var bibo = instance.connect()) {
             var sel = bibo.transmit(AIDUtil.select(TEST_APPLET_AID));
@@ -112,7 +113,7 @@ public class ExtendedLengthTest {
         byte[] input = new byte[]{DUMMY};
         byte[] expectedOutput = sha1.digest(input);
 
-        Simulator instance = prepareSimulator();
+        JavaCardEngine instance = prepareSimulator();
 
         try (var bibo = instance.connect()) {
             var sel = bibo.transmit(AIDUtil.select(TEST_APPLET_AID));
@@ -129,7 +130,7 @@ public class ExtendedLengthTest {
         byte le = (byte) 0x4;
         byte[] expectedOutput = new byte[]{0, 0, 0, le};
 
-        Simulator instance = prepareSimulator();
+        JavaCardEngine instance = prepareSimulator();
 
         try (var bibo = instance.connect()) {
             var sel = bibo.transmit(AIDUtil.select(TEST_APPLET_AID));
@@ -146,7 +147,7 @@ public class ExtendedLengthTest {
     public void testExtendedApduCase2Le() {
         byte[] expectedOutput = new byte[]{0, 0, 1, 2};
 
-        Simulator instance = prepareSimulator();
+        JavaCardEngine instance = prepareSimulator();
 
         try (var bibo = instance.connect()) {
             var sel = bibo.transmit(AIDUtil.select(TEST_APPLET_AID));
@@ -163,7 +164,7 @@ public class ExtendedLengthTest {
     public void testExtendedApduLcLe() {
         byte[] expectedOutput = {0x0, 0x1, 0x1F, (byte) 0xCA};
 
-        Simulator instance = prepareSimulator();
+        JavaCardEngine instance = prepareSimulator();
 
         try (var bibo = instance.connect()) {
             var sel = bibo.transmit(AIDUtil.select(TEST_APPLET_AID));
@@ -180,7 +181,7 @@ public class ExtendedLengthTest {
     public void testExtendedApduEchoWith1Byte() throws NoSuchAlgorithmException {
         byte[] expectedOutput = {0x41};
 
-        Simulator instance = prepareSimulator();
+        JavaCardEngine instance = prepareSimulator();
 
         try (var bibo = instance.connect()) {
             var sel = bibo.transmit(AIDUtil.select(TEST_APPLET_AID));
@@ -199,7 +200,7 @@ public class ExtendedLengthTest {
         Arrays.fill(input, DUMMY);
         byte[] expectedOutput = sha1.digest(input);
 
-        Simulator instance = prepareSimulator();
+        JavaCardEngine instance = prepareSimulator();
 
         try (var bibo = instance.connect()) {
             var sel = bibo.transmit(AIDUtil.select(TEST_APPLET_AID));

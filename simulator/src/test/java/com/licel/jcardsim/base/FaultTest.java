@@ -5,6 +5,7 @@ package com.licel.jcardsim.base;
 import apdu4j.core.CommandAPDU;
 import com.licel.jcardsim.utils.AIDUtil;
 import org.testng.annotations.Test;
+import pro.javacard.engine.JavaCardEngine;
 import pro.javacard.engine.faulty.FaultyConfig;
 import pro.javacard.engine.testapplets.FaultApplet;
 
@@ -19,7 +20,7 @@ public class FaultTest {
                 .faultyAt(2, FaultApplet.class, 26)
 
                 .build();
-        var instance = new Simulator(config);
+        var instance = new JavaCardEngine.Builder().faulty(config).build();
         var aid = AIDUtil.create("010203040506");
         assertEquals(instance.installApplet(aid, FaultApplet.class), aid);
 
@@ -34,7 +35,7 @@ public class FaultTest {
 
     @Test
     public void testNoFault() {
-        var instance = new Simulator();
+        var instance = JavaCardEngine.create();
         var aid = AIDUtil.create("010203040506");
         assertEquals(instance.installApplet(aid, FaultApplet.class), aid);
 

@@ -16,6 +16,7 @@ import javacardx.framework.string.StringException;
 import javacardx.framework.tlv.TLVException;
 import javacardx.framework.util.UtilException;
 import org.testng.annotations.Test;
+import pro.javacard.engine.JavaCardEngine;
 
 import static org.testng.Assert.*;
 
@@ -860,7 +861,7 @@ public class AppletProcessExceptionTest {
     }
 
     private BIBO getReadySimulator() {
-        Simulator instance = new Simulator();
+        JavaCardEngine instance = JavaCardEngine.create();
         AID appletAID = AIDUtil.create(appletAIDStr);
 
         instance.installApplet(appletAID, RuntimeExceptionApplet.class);

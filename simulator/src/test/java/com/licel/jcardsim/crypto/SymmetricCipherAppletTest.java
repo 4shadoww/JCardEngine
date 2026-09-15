@@ -3,7 +3,6 @@
 package com.licel.jcardsim.crypto;
 
 import apdu4j.core.CommandAPDU;
-import com.licel.jcardsim.base.Simulator;
 import com.licel.jcardsim.samples.SymmetricCipherApplet;
 import com.licel.jcardsim.utils.AIDUtil;
 import javacard.framework.AID;
@@ -12,17 +11,17 @@ import javacardx.crypto.Cipher;
 import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.encoders.Hex;
 import org.testng.annotations.Test;
+import pro.javacard.engine.JavaCardEngine;
 
 import static org.testng.Assert.*;
 
-// Split out from SymmetricCipherImplTest because these go strictly through the Simulator interface
 public class SymmetricCipherAppletTest {
     /**
      * Test AES encryption/decryption and try DES cipher with AES key type
      */
     @Test
     public void testSymmetricCipherAESEncryptionInApplet() {
-        Simulator sim = new Simulator();
+        JavaCardEngine sim = JavaCardEngine.create();
 
         String appletAIDStr = "010203040506070809";
         AID appletAID = AIDUtil.create(appletAIDStr);
@@ -86,7 +85,7 @@ public class SymmetricCipherAppletTest {
      */
     @Test
     public void testSymmetricCipherDESEncryptionInApplet() {
-        Simulator sim = new Simulator();
+        JavaCardEngine sim = JavaCardEngine.create();
 
         String appletAIDStr = "010203040506070809";
         AID appletAID = AIDUtil.create(appletAIDStr);

@@ -10,6 +10,7 @@ import com.licel.jcardsim.utils.AIDUtil;
 import javacard.framework.AID;
 import javacard.framework.ISO7816;
 import org.testng.annotations.Test;
+import pro.javacard.engine.JavaCardEngine;
 
 import static org.testng.Assert.*;
 
@@ -17,7 +18,7 @@ public class ApduContextTest {
 
     @Test
     public void testCallingGetCurrentAPDUinWrongContextThrows() {
-        Simulator simulator = new Simulator();
+        JavaCardEngine simulator = JavaCardEngine.create();
         AID otherAppletAID = AIDUtil.create("d0000cafe00001");
         AID dummyAppletAID = AIDUtil.create("d0000cafe00002");
 
@@ -48,7 +49,7 @@ public class ApduContextTest {
 
     @Test
     public void testDeselectViaSelect() {
-        Simulator simulator = new Simulator();
+        JavaCardEngine simulator = JavaCardEngine.create();
         AID otherAppletAID = AIDUtil.create("d0000cafe00001");
         AID dummyAppletAID = AIDUtil.create("d0000cafe00002");
 

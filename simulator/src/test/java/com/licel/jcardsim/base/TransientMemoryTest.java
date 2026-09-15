@@ -12,6 +12,7 @@ import javacard.security.AESKey;
 import javacard.security.CryptoException;
 import javacard.security.KeyBuilder;
 import org.testng.annotations.Test;
+import pro.javacard.engine.JavaCardEngine;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -80,7 +81,7 @@ public class TransientMemoryTest {
 
     @Test
     public void clearOnDeselectIsContextScoped() {
-        var sim = new Simulator();
+        var sim = (Simulator) JavaCardEngine.create();
         var aidA = AIDUtil.create("a00000001101");
         var aidB = AIDUtil.create("b00000002202");
         sim.installApplet(aidA, Sha1Applet.class);
@@ -143,7 +144,7 @@ public class TransientMemoryTest {
         byte[] expectedOutput = sha1.digest(new byte[]{'A'});
         AID aid = AIDUtil.create("0102030405");
 
-        Simulator instance = new Simulator();
+        JavaCardEngine instance = JavaCardEngine.create();
         instance.installApplet(aid, Sha1Applet.class);
 
         try (var bibo = instance.connect()) {
@@ -172,7 +173,7 @@ public class TransientMemoryTest {
 
     @Test
     public void transientKeyClearsInitializedState() {
-        var sim = new Simulator();
+        var sim = (Simulator) JavaCardEngine.create();
         var scope = sim.asCurrent();
         try (scope) {
             AESKey key = (AESKey) KeyBuilder.buildKey(KeyBuilder.TYPE_AES_TRANSIENT_RESET, KeyBuilder.LENGTH_AES_128, false);

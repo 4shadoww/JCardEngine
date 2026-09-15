@@ -11,6 +11,7 @@ import javacard.framework.AID;
 import javacard.framework.APDU;
 import javacard.framework.ISO7816;
 import org.testng.annotations.Test;
+import pro.javacard.engine.JavaCardEngine;
 
 import static org.testng.Assert.*;
 
@@ -27,7 +28,7 @@ public class ProtocolTest {
     public void testDualInterfaceApplet() {
         final String expectedOutput = "CAFE9000".toLowerCase();
 
-        Simulator simulator = new Simulator();
+        JavaCardEngine simulator = JavaCardEngine.create();
         simulator.installApplet(aid, DualInterfaceApplet.class);
 
         // check interface is T=0 (contacted)

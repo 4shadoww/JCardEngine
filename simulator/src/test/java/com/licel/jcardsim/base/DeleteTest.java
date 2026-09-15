@@ -10,6 +10,7 @@ import com.licel.jcardsim.utils.ByteUtil;
 import javacard.framework.AID;
 import javacard.framework.ISO7816;
 import org.testng.annotations.Test;
+import pro.javacard.engine.JavaCardEngine;
 
 import static org.testng.Assert.*;
 
@@ -22,7 +23,7 @@ public class DeleteTest {
         AID aid1 = AIDUtil.create("d0000cafe00001");
         AID aid2 = AIDUtil.create("d0000cafe00002");
 
-        Simulator simulator = new Simulator();
+        JavaCardEngine simulator = JavaCardEngine.create();
 
         // install first instance
         simulator.installApplet(aid1, MultiInstanceApplet.class);

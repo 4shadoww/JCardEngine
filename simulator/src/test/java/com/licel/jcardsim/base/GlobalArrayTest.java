@@ -10,6 +10,7 @@ import javacard.framework.AID;
 import javacard.framework.ISO7816;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
+import pro.javacard.engine.JavaCardEngine;
 
 import static org.testng.Assert.*;
 
@@ -58,7 +59,7 @@ public class GlobalArrayTest {
      */
     @Test
     public void testAccessGlobalArrayByteByClientApplet() {
-        Simulator instance = new Simulator();
+        JavaCardEngine instance = JavaCardEngine.create();
 
         // Install server and client applet
         assertEquals(instance.installApplet(serverAppletAID, GlobalArrayServerApplet.class), serverAppletAID);

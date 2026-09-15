@@ -11,6 +11,7 @@ import javacard.framework.AID;
 import javacard.framework.ISO7816;
 import org.bouncycastle.util.Arrays;
 import org.testng.annotations.Test;
+import pro.javacard.engine.JavaCardEngine;
 
 import static org.testng.Assert.*;
 
@@ -24,7 +25,7 @@ public class ApduExtendedCasesTest {
 
     @Test
     public void testApduCase2_Request256BytesWithLeZeroValue() {
-        Simulator instance = getReadySimulator();
+        JavaCardEngine instance = getReadySimulator();
         AID appletAID = AIDUtil.create(appletAIDBytes);
 
         try (var bibo = instance.connect()) {
@@ -44,7 +45,7 @@ public class ApduExtendedCasesTest {
 
     @Test
     public void testApduCase2E_Request256BytesWith3ByteLe() {
-        Simulator instance = getReadySimulator();
+        JavaCardEngine instance = getReadySimulator();
         AID appletAID = AIDUtil.create(appletAIDBytes);
 
         try (var bibo = instance.connect()) {
@@ -65,7 +66,7 @@ public class ApduExtendedCasesTest {
 
     @Test
     public void testApduCase3E_Send256Bytes() {
-        Simulator instance = getReadySimulator();
+        JavaCardEngine instance = getReadySimulator();
         AID appletAID = AIDUtil.create(appletAIDBytes);
 
         try (var bibo = instance.connect()) {
@@ -83,7 +84,7 @@ public class ApduExtendedCasesTest {
 
     @Test
     public void testApduCase4_Request256BytesWithLeZeroValue() {
-        Simulator instance = getReadySimulator();
+        JavaCardEngine instance = getReadySimulator();
         AID appletAID = AIDUtil.create(appletAIDBytes);
 
         try (var bibo = instance.connect()) {
@@ -103,7 +104,7 @@ public class ApduExtendedCasesTest {
 
     @Test
     public void testApduCase4E_Send256BytesAndRequest256Bytes() {
-        Simulator instance = getReadySimulator();
+        JavaCardEngine instance = getReadySimulator();
         AID appletAID = AIDUtil.create(appletAIDBytes);
 
         try (var bibo = instance.connect()) {
@@ -126,7 +127,7 @@ public class ApduExtendedCasesTest {
 
     @Test
     public void malformedInputRejectedAtTheBoundary() {
-        Simulator instance = getReadySimulator();
+        JavaCardEngine instance = getReadySimulator();
 
         try (var bibo = instance.connect()) {
             // null is not a frame, so it is a bad argument rather than a card response
@@ -144,8 +145,8 @@ public class ApduExtendedCasesTest {
         }
     }
 
-    private Simulator getReadySimulator() {
-        Simulator instance = new Simulator();
+    private JavaCardEngine getReadySimulator() {
+        JavaCardEngine instance = JavaCardEngine.create();
         AID appletAID = AIDUtil.create(appletAIDBytes);
 
         instance.installApplet(appletAID, ApduExtendedCasesApplet.class);

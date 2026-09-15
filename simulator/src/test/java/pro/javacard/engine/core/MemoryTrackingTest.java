@@ -7,6 +7,7 @@ import com.licel.jcardsim.base.Simulator;
 import com.licel.jcardsim.utils.AIDUtil;
 import javacard.framework.AID;
 import org.testng.annotations.Test;
+import pro.javacard.engine.JavaCardEngine;
 import pro.javacard.engine.testapplets.MemoryTestApplet;
 
 import static org.testng.Assert.*;
@@ -15,7 +16,7 @@ public class MemoryTrackingTest {
 
     @Test(enabled = false)
     public void testArrayTracking() {
-        Simulator simulator = new Simulator();
+        var simulator = (Simulator) JavaCardEngine.create();
         AID appletAID = AIDUtil.create("010203040506070809");
         simulator.installApplet(appletAID, MemoryTestApplet.class);
 
@@ -59,7 +60,7 @@ public class MemoryTrackingTest {
 
     @Test
     public void testSensitiveArrays() {
-        Simulator simulator = new Simulator();
+        JavaCardEngine simulator = JavaCardEngine.create();
         AID appletAID = AIDUtil.create("010203040506070809");
         simulator.installApplet(appletAID, MemoryTestApplet.class);
 

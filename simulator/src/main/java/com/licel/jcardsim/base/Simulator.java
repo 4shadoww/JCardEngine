@@ -26,7 +26,6 @@ import pro.javacard.engine.globalplatform.Context;
 import pro.javacard.engine.globalplatform.EngineRegistryEntry;
 import pro.javacard.engine.globalplatform.GlobalPlatformEngine;
 import pro.javacard.engine.globalplatform.RegistryPolicy;
-import pro.javacard.engine.globalplatform.SCPConfig;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -131,26 +130,6 @@ public class Simulator implements JavaCardEngine, JavaCardRuntime {
         this.rng = seed == null ? new SecureRandom() : new DeterministicRandom(seed);
         this.trace = trace;
         this.callcount = features.contains(Feature.CALLCOUNT) ? new HashMap<>() : null;
-    }
-
-    public Simulator(ClassLoader loader, FaultyConfig faultConfig, GlobalPlatformEngine globalPlatform) {
-        this(loader, faultConfig, globalPlatform, null, null, Set.of());
-    }
-
-    public Simulator(ClassLoader loader, FaultyConfig faultConfig) {
-        this(loader, faultConfig, new GlobalPlatformEngine(SCPConfig.defaultConfig()));
-    }
-
-    public Simulator(ClassLoader loader) {
-        this(loader, null);
-    }
-
-    public Simulator(FaultyConfig faultConfig) {
-        this(Simulator.class.getClassLoader(), faultConfig);
-    }
-
-    public Simulator() throws RuntimeException {
-        this(Simulator.class.getClassLoader(), null);
     }
 
     @Override
@@ -499,22 +478,6 @@ public class Simulator implements JavaCardEngine, JavaCardRuntime {
         return selecting;
         // NOTE: there is a proxy in play, so identity makes no sense.
         // return aThis == getApplet(getAID()) && selecting;
-    }
-
-    /**
-     * Transmit APDU to previously selected applet or select a new applet
-     *
-     * @param command command apdu
-     * @return response apdu
-     */
-    // Convenience: creates a session, sends one command, closes the session.
-    public byte[] transceive(byte[] command) throws SystemException {
-        if (creator != Thread.currentThread()) {
-            log.error("Do not call from a different thread.");
-        }
-        try (var session = connect()) {
-            return session.transceive(command);
-        }
     }
 
     int command_counter = 0;

@@ -4,10 +4,10 @@ package pro.javacard.engine.core;
 
 import apdu4j.core.BIBO;
 import apdu4j.core.CommandAPDU;
-import com.licel.jcardsim.base.Simulator;
 import com.licel.jcardsim.utils.AIDUtil;
 import javacard.framework.JCSystem;
 import org.testng.annotations.Test;
+import pro.javacard.engine.JavaCardEngine;
 import pro.javacard.engine.testapplets.MemoryApplet;
 
 import java.nio.ByteBuffer;
@@ -18,7 +18,7 @@ public class MemoryAppletTest {
     private static final String AID_HEX = "D23300000077" + "4D454D2D3031" + "01";
 
     private static BIBO selectFresh() {
-        var sim = new Simulator();
+        var sim = JavaCardEngine.create();
         var aid = AIDUtil.create(AID_HEX);
         sim.installApplet(aid, MemoryApplet.class);
         var bibo = sim.connect();

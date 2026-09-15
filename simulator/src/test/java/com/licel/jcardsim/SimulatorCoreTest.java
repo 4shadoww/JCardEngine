@@ -5,6 +5,7 @@ package com.licel.jcardsim;
 import com.licel.jcardsim.base.Simulator;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.BeforeClass;
+import pro.javacard.engine.JavaCardEngine;
 
 public abstract class SimulatorCoreTest {
     // These tests don't create an explicit Simulator instance
@@ -14,7 +15,7 @@ public abstract class SimulatorCoreTest {
 
     @BeforeClass
     public void implicitSimulator() {
-        sim = new Simulator().asCurrent();
+        sim = ((Simulator) JavaCardEngine.create()).asCurrent();
     }
 
     @AfterClass

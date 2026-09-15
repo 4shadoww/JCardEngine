@@ -5,7 +5,6 @@ package com.licel.jcardsim;
 
 import apdu4j.core.CommandAPDU;
 import apdu4j.pcsc.sim.SynthesizedCardTerminal;
-import com.licel.jcardsim.base.Simulator;
 import com.licel.jcardsim.samples.HelloWorldApplet;
 import com.licel.jcardsim.utils.AIDUtil;
 import javacard.framework.AID;
@@ -43,7 +42,7 @@ public class DocumentationCodeSamplesTest implements SmartCardTest {
     @Test
     public void testCodeListing1() {
         // 1. Create simulator
-        var simulator = new Simulator();
+        var simulator = JavaCardEngine.create();
         var appletAID = AIDUtil.create("F000000001");
         simulator.installApplet(appletAID, HelloWorldApplet.class);
 
@@ -59,7 +58,7 @@ public class DocumentationCodeSamplesTest implements SmartCardTest {
 
     @Test
     public void testCodeListing2() {
-        var simulator = new Simulator();
+        var simulator = JavaCardEngine.create();
 
         var appletAIDBytes = new byte[]{1, 2, 3, 4, 5, 6, 7, 8, 9};
         var appletAID = new AID(appletAIDBytes, (short) 0, (byte) appletAIDBytes.length);
@@ -87,7 +86,7 @@ public class DocumentationCodeSamplesTest implements SmartCardTest {
 
     @Test
     public void testCodeListing3() {
-        var simulator = new Simulator();
+        var simulator = JavaCardEngine.create();
 
         var appletAIDBytes = new byte[]{1, 2, 3, 4, 5, 6, 7, 8, 9};
         var appletAID = new AID(appletAIDBytes, (short) 0, (byte) appletAIDBytes.length);
