@@ -99,6 +99,7 @@ public class HelloWorldApplet extends Applet {
     /**
      * This method is called each time the applet receives APDU.
      */
+    @Override
     public void process(APDU apdu) {
         // good practice
         if (selectingApplet()) {

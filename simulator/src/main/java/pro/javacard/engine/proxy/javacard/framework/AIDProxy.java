@@ -74,6 +74,7 @@ public class AIDProxy {
      * @return <code>true</code> if the AID byte values are equal, <code>false</code> otherwise
      * @throws SecurityException if <code>anObject</code> object is not accessible in the caller's context
      */
+    @Override
     public final boolean equals(Object anObject) throws SecurityException {
 
         if (anObject instanceof AID other) {

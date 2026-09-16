@@ -42,11 +42,13 @@ public class DualInterfaceApplet extends Applet {
         store = new byte[255];
     }
 
+    @Override
     public boolean select() {
         selectProtocol = APDU.getProtocol();
         return true;
     }
 
+    @Override
     public void process(APDU apdu) {
         byte[] buffer = apdu.getBuffer();
 

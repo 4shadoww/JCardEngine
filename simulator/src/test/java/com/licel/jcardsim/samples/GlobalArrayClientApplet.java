@@ -48,6 +48,7 @@ public class GlobalArrayClientApplet extends Applet {
     }
 
 
+    @Override
     public void process(APDU apdu) {
         if (selectingApplet()) {
             return;

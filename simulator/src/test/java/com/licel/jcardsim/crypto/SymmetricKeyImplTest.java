@@ -62,18 +62,22 @@ public class SymmetricKeyImplTest extends SimulatorCoreTest {
         assertEquals(KeyBuilder.getMemoryType(desKey), JCSystem.MEMORY_TYPE_PERSISTENT);
         // a foreign Key instance throws CryptoException, not ClassCastException
         Key foreign = new Key() {
+            @Override
             public byte getType() {
                 return KeyBuilder.TYPE_DES;
             }
 
+            @Override
             public short getSize() {
                 return KeyBuilder.LENGTH_DES;
             }
 
+            @Override
             public boolean isInitialized() {
                 return false;
             }
 
+            @Override
             public void clearKey() {
             }
         };

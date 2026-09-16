@@ -73,6 +73,7 @@ public class DummyApplet extends Applet implements AppletEvent {
         }
     }
 
+    @Override
     public void uninstall() {
         try {
             APDU.getCurrentAPDU();

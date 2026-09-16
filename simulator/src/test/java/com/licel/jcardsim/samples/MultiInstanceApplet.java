@@ -41,6 +41,7 @@ public class MultiInstanceApplet extends Applet implements AppletEvent {
         return !locked;
     }
 
+    @Override
     public void process(APDU apdu) {
         byte[] buffer = apdu.getBuffer();
 
@@ -86,6 +87,7 @@ public class MultiInstanceApplet extends Applet implements AppletEvent {
         }
     }
 
+    @Override
     public void uninstall() {
         --instanceCounter;
     }

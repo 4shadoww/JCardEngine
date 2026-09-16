@@ -183,6 +183,7 @@ public final class AsymmetricSignatureImpl extends Signature implements Signatur
         return s == null ? null : new AsymmetricSignatureImpl(s);
     }
 
+    @Override
     public void init(Key theKey, byte theMode) throws CryptoException {
         if (theKey == null) {
             CryptoException.throwIt(CryptoException.UNINITIALIZED_KEY);
@@ -206,10 +207,12 @@ public final class AsymmetricSignatureImpl extends Signature implements Signatur
         isInitialized = true;
     }
 
+    @Override
     public void init(Key theKey, byte theMode, byte[] bArray, short bOff, short bLen) throws CryptoException {
         CryptoException.throwIt(CryptoException.ILLEGAL_VALUE);
     }
 
+    @Override
     public short getLength() throws CryptoException {
         if (!isInitialized) {
             CryptoException.throwIt(CryptoException.INVALID_INIT);
@@ -237,10 +240,12 @@ public final class AsymmetricSignatureImpl extends Signature implements Signatur
         return (short) (seqHeader + content);
     }
 
+    @Override
     public byte getAlgorithm() {
         return algorithm;
     }
 
+    @Override
     public void update(byte[] inBuff, short inOffset, short inLength) throws CryptoException {
         if (!isInitialized) {
             CryptoException.throwIt(CryptoException.INVALID_INIT);
@@ -248,6 +253,7 @@ public final class AsymmetricSignatureImpl extends Signature implements Signatur
         engine.update(inBuff, inOffset, inLength);
     }
 
+    @Override
     public short sign(byte[] inBuff, short inOffset, short inLength, byte[] sigBuff, short sigOffset)
             throws CryptoException {
         if (isRecovery) {
@@ -272,6 +278,7 @@ public final class AsymmetricSignatureImpl extends Signature implements Signatur
         return -1;
     }
 
+    @Override
     public boolean verify(byte[] inBuff, short inOffset, short inLength, byte[] sigBuff, short sigOffset,
             short sigLength) throws CryptoException {
         if (isRecovery) {
@@ -288,6 +295,7 @@ public final class AsymmetricSignatureImpl extends Signature implements Signatur
         return b;
     }
 
+    @Override
     public short beginVerify(byte[] sigAndRecDataBuff, short buffOffset, short sigLength) throws CryptoException {
         if (!isRecovery) {
             CryptoException.throwIt(CryptoException.ILLEGAL_USE);
@@ -306,6 +314,7 @@ public final class AsymmetricSignatureImpl extends Signature implements Signatur
         return -1;
     }
 
+    @Override
     public short sign(byte[] inBuff, short inOffset, short inLength, byte[] sigBuff, short sigOffset, short[] recMsgLen,
             short recMsgLenOffset) throws CryptoException {
         if (!isRecovery) {
@@ -331,6 +340,7 @@ public final class AsymmetricSignatureImpl extends Signature implements Signatur
         return -1;
     }
 
+    @Override
     public boolean verify(byte[] inBuff, short inOffset, short inLength) throws CryptoException {
         if (!isRecovery) {
             CryptoException.throwIt(CryptoException.ILLEGAL_USE);
@@ -347,11 +357,13 @@ public final class AsymmetricSignatureImpl extends Signature implements Signatur
         return b;
     }
 
+    @Override
     public void setInitialDigest(byte[] bytes, short s, short s1, byte[] bytes1, short s2, short s3)
             throws CryptoException {
         throw new UnsupportedOperationException("Not supported yet.");
     }
 
+    @Override
     public short signPreComputedHash(byte[] hashBuff, short hashOffset, short hashLength, byte[] sigBuff,
             short sigOffset) throws CryptoException {
         PrecomputedHashSigner strategy = precomputedStrategy();
@@ -368,6 +380,7 @@ public final class AsymmetricSignatureImpl extends Signature implements Signatur
         return 0;
     }
 
+    @Override
     public boolean verifyPreComputedHash(byte[] hashBuff, short hashOffset, short hashLength, byte[] sigBuff,
             short sigOffset, short sigLength) throws CryptoException {
         PrecomputedHashSigner strategy = precomputedStrategy();
@@ -394,14 +407,17 @@ public final class AsymmetricSignatureImpl extends Signature implements Signatur
     }
 
     // spec == null means ISO9796_MR, which has no table entry.
+    @Override
     public byte getPaddingAlgorithm() {
         return spec != null ? spec.padding : Cipher.PAD_ISO9796_MR;
     }
 
+    @Override
     public byte getCipherAlgorithm() {
         return spec != null ? spec.cipher : Signature.SIG_CIPHER_RSA;
     }
 
+    @Override
     public byte getMessageDigestAlgorithm() {
         return spec != null ? spec.md : MessageDigest.ALG_SHA;
     }

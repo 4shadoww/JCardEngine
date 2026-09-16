@@ -129,6 +129,7 @@ public class ContextProbeApplet extends Applet implements Personalization {
         }
     }
 
+    @Override
     public short processData(byte[] inBuffer, short inOffset, short inLength, byte[] outBuffer, short outOffset) {
         results[SLOT_STEP] = STEP_PERSO_READ;
         try {
@@ -168,6 +169,7 @@ public class ContextProbeApplet extends Applet implements Personalization {
         return 0;
     }
 
+    @Override
     public void process(APDU apdu) {
         if (selectingApplet()) {
             return;

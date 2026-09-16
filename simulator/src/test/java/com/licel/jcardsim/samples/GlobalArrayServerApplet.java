@@ -62,6 +62,7 @@ public class GlobalArrayServerApplet extends Applet implements GlobalArrayAccess
         }
     }
 
+    @Override
     public Shareable getShareableInterfaceObject(AID clientAID, byte parameter) {
         return this;
     }

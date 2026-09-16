@@ -40,6 +40,7 @@ public class Sha1Applet extends Applet implements ExtendedLength {
         lastDigest = JCSystem.makeTransientByteArray(digest.getLength(), JCSystem.CLEAR_ON_DESELECT);
     }
 
+    @Override
     public void process(APDU apdu) {
         byte[] buffer = apdu.getBuffer();
         if (selectingApplet()) {

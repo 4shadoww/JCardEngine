@@ -54,10 +54,12 @@ public class PersistentApplet extends Applet {
         new PersistentApplet(bArray, bOffset, bLength).register(bArray, (short) (bOffset + 1), bArray[bOffset]);
     }
 
+    @Override
     public void deselect() {
         deSelectCounter++;
     }
 
+    @Override
     public void process(APDU apdu) {
 
         if (selectingApplet()) {

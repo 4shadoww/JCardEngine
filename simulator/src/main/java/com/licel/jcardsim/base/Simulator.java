@@ -193,6 +193,7 @@ public class Simulator implements JavaCardEngine, JavaCardRuntime {
     }
 
     // These load the applet without class isolation, so that internals are exposed to caller.
+    @Override
     public AID installExposedApplet(AID aid, Class<? extends Applet> appletClass, byte[] params) {
         return installApplet(aid, appletClass, params, true);
     }
@@ -234,6 +235,7 @@ public class Simulator implements JavaCardEngine, JavaCardRuntime {
         return success;
     }
 
+    @Override
     public byte[] getATR() {
         // FIXME: remove from this layer unless GPSystem.setATRHistBytes gets implemented
         return Hex.decode(DEFAULT_ATR);
@@ -410,6 +412,7 @@ public class Simulator implements JavaCardEngine, JavaCardRuntime {
         }
     }
 
+    @Override
     public void internalDeleteApplet(AID aid) {
         log.info("Deleting applet {}", aid);
         var app = globalPlatform.lookup(aid);
@@ -839,6 +842,7 @@ public class Simulator implements JavaCardEngine, JavaCardRuntime {
     }
 
     // Same fetch for a caller that already holds the server's entry, e.g. the Global Service lookup.
+    @Override
     public Shareable getSharedObject(EngineRegistryEntry entry, byte parameter) {
         var serverAID = entry.getAID();
         // JC API: null if the calling applet has not yet invoked Applet.register(), which is exactly
@@ -875,6 +879,7 @@ public class Simulator implements JavaCardEngine, JavaCardRuntime {
 
     // Platform-context SIO fetch: getShareableInterfaceObject(null, parameter), so the server
     // sees a null clientAID (system/CRS/OPEN caller). Used by CL event fan-out. GPC v2.3.1 Amd C 3.10.
+    @Override
     public Shareable getSystemSharedObject(AID serverAID, byte parameter) {
         var entry = globalPlatform.lookup(serverAID);
         var serverApplet = entry == null ? null : entry.getApplet();

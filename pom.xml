@@ -246,6 +246,7 @@
                             <recipe>org.openrewrite.staticanalysis.NeedBraces</recipe>
                             <recipe>org.openrewrite.staticanalysis.EmptyBlock</recipe>
                             <recipe>org.openrewrite.staticanalysis.ModifierOrder</recipe>
+                            <recipe>org.openrewrite.staticanalysis.MissingOverrideAnnotation</recipe>
                             <!-- Dead code / redundancy -->
                             <recipe>org.openrewrite.staticanalysis.RemoveExtraSemicolons</recipe>
                             <recipe>org.openrewrite.staticanalysis.UnnecessaryParentheses</recipe>

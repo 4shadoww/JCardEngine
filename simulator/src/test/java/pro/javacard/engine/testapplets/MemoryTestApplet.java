@@ -14,6 +14,7 @@ public class MemoryTestApplet extends Applet {
         new MemoryTestApplet().register(bArray, (short) (bOffset + 1), bArray[bOffset]);
     }
 
+    @Override
     public void process(APDU apdu) {
         if (selectingApplet()) {
             return;

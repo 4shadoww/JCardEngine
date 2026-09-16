@@ -26,6 +26,7 @@ public class MemoryApplet extends Applet {
     static final class Extended implements Report {
         private final short[] scratch = JCSystem.makeTransientShortArray((short) 2, JCSystem.CLEAR_ON_RESET);
 
+        @Override
         public short extract(byte[] dst, short offset) {
             write(dst, offset, JCSystem.MEMORY_TYPE_PERSISTENT);
             write(dst, (short) (offset + 4), JCSystem.MEMORY_TYPE_TRANSIENT_RESET);
@@ -40,6 +41,7 @@ public class MemoryApplet extends Applet {
             Util.setShort(dst, (short) (off + 2), scratch[1]);
         }
 
+        @Override
         public void gc() {
             // step: Refuse when the runtime cannot delete objects
             if (!JCSystem.isObjectDeletionSupported()) {
@@ -53,6 +55,7 @@ public class MemoryApplet extends Applet {
     static final class Legacy implements Report {
         private static final byte[] TYPES = {JCSystem.MEMORY_TYPE_PERSISTENT, JCSystem.MEMORY_TYPE_TRANSIENT_RESET, JCSystem.MEMORY_TYPE_TRANSIENT_DESELECT};
 
+        @Override
         public short extract(byte[] dst, short offset) {
             short i = 0;
             // step: Three readings
@@ -64,6 +67,7 @@ public class MemoryApplet extends Applet {
             return 6;
         }
 
+        @Override
         public void gc() {
             // step: A refused request surfaces as SystemException
             try {
@@ -90,6 +94,7 @@ public class MemoryApplet extends Applet {
         new MemoryApplet(bArray).register(bArray, (short) (bOffset + 1), bArray[bOffset]);
     }
 
+    @Override
     public void process(APDU apdu) {
         if (selectingApplet()) {
             return;

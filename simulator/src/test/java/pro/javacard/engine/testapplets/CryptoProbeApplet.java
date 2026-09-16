@@ -91,6 +91,7 @@ public class CryptoProbeApplet extends Applet implements ExtendedLength {
         new CryptoProbeApplet().register(bArray, (short) (bOffset + 1), bArray[bOffset]);
     }
 
+    @Override
     public void process(APDU apdu) {
         if (selectingApplet()) {
             return;
