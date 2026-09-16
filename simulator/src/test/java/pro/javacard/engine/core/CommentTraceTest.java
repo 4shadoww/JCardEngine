@@ -183,6 +183,6 @@ public class CommentTraceTest {
             }
         }
         String dropped = "// step: Never compiled: no code follows it in its block, dropped";
-        assertTrue(warnings.stream().anyMatch(w -> w.startsWith("src/test/java/pro/javacard/engine/testapplets/MemoryApplet.java:") && w.endsWith(dropped)), warnings.toString());
+        assertTrue(warnings.stream().anyMatch(w -> w.startsWith(Path.of("src/test/java/pro/javacard/engine/testapplets/MemoryApplet.java") + ":") && w.endsWith(dropped)), warnings.toString());
     }
 }
