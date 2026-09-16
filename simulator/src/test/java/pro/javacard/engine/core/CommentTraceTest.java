@@ -91,19 +91,19 @@ public class CommentTraceTest {
         for (List<String> r : counted.subList(1, counted.size())) {
             List<Integer> counts = r.stream().map(l -> Integer.valueOf(l.substring(0, l.indexOf(' ')))).toList();
             assertEquals(counts, counts.stream().sorted(Comparator.reverseOrder()).toList(), r.toString());
-            assertTrue(r.contains("1 MemoryApplet.process(APDU)"), r.toString());
-            assertTrue(r.contains("1 Applet.selectingApplet()"), r.toString());
+            assertTrue(r.contains("1 MemoryApplet#process(APDU)"), r.toString());
+            assertTrue(r.contains("1 Applet#selectingApplet()"), r.toString());
         }
         assertTrue(counted.stream().anyMatch(r -> !r.get(0).startsWith("1 ")), counted.toString());
 
         var lines = counted.stream().flatMap(List::stream).toList();
-        assertTrue(lines.contains("1 MemoryApplet$Extended.extract(byte[],short)"), lines.toString());
-        assertFalse(lines.stream().anyMatch(l -> l.contains("Object.")), lines.toString());
+        assertTrue(lines.contains("1 MemoryApplet$Extended#extract(byte[],short)"), lines.toString());
+        assertFalse(lines.stream().anyMatch(l -> l.contains("Object#")), lines.toString());
 
         var traced = reports(run(Preferences.of(JavaCardEngine.CALLS, CallLog.Mode.TRACE)), "calls");
         assertEquals(traced.size(), counted.size());
         for (List<String> r : traced.subList(1, traced.size())) {
-            assertTrue(r.indexOf("MemoryApplet.process(APDU)") < r.indexOf("Applet.selectingApplet()"), r.toString());
+            assertTrue(r.indexOf("MemoryApplet#process(APDU)") < r.indexOf("Applet#selectingApplet()"), r.toString());
         }
         var tracetotals = traced.stream().map(r -> r.stream().collect(Collectors.groupingBy(Function.identity(), Collectors.counting()))).toList();
         var counttotals = counted.stream().map(r -> r.stream().collect(Collectors.toMap(l -> l.substring(l.indexOf(' ') + 1), l -> Long.valueOf(l.substring(0, l.indexOf(' ')))))).toList();
@@ -113,8 +113,8 @@ public class CommentTraceTest {
         var streamed = run(Preferences.of(JavaCardEngine.CALLS, CallLog.Mode.STREAM, JavaCardEngine.TRACE_FILTER, "."))
                 .stream().filter(l -> l.contains("trace - ")).map(l -> l.substring(l.indexOf("trace - ") + 8)).toList();
         var dispatch = streamed.stream().filter(l -> l.endsWith("// step: Dispatch on INS")).findFirst().orElseThrow();
-        assertTrue(streamed.indexOf("MemoryApplet.process(APDU)") < streamed.indexOf(dispatch), streamed.toString());
-        assertTrue(streamed.indexOf(dispatch) < streamed.indexOf("APDU.getBuffer()"), streamed.toString());
+        assertTrue(streamed.indexOf("MemoryApplet#process(APDU)") < streamed.indexOf(dispatch), streamed.toString());
+        assertTrue(streamed.indexOf(dispatch) < streamed.indexOf("APDU#getBuffer()"), streamed.toString());
     }
 
     @Test

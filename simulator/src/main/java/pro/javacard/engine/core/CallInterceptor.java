@@ -30,7 +30,7 @@ final class CallInterceptor extends ClassVisitor {
 
     @Override
     public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
-        String self = label(type, name, descriptor);
+        String self = label(type, name, descriptor, (access & Opcodes.ACC_STATIC) != 0);
         String superctor = name.equals("<init>") ? parent : null;
         return new MethodVisitor(Opcodes.ASM9, super.visitMethod(access, name, descriptor, signature, exceptions)) {
             @Override
@@ -41,7 +41,7 @@ final class CallInterceptor extends ClassVisitor {
 
             @Override
             public void visitMethodInsn(int opcode, String owner, String method, String desc, boolean isInterface) {
-                String callee = owner.equals(superctor) && method.equals("<init>") ? null : callee(owner, method, desc);
+                String callee = owner.equals(superctor) && method.equals("<init>") ? null : callee(owner, method, desc, opcode == Opcodes.INVOKESTATIC);
                 if (callee != null) {
                     BytecodeUtils.callback(mv, "__call", callee);
                 }
@@ -50,7 +50,7 @@ final class CallInterceptor extends ClassVisitor {
         };
     }
 
-    private String callee(String owner, String method, String desc) {
+    private String callee(String owner, String method, String desc, boolean isstatic) {
         String declaring = owner;
         while (loader.isolates(declaring)) {
             ClassReader reader = BytecodeUtils.reader(loader, declaring);
@@ -62,7 +62,7 @@ final class CallInterceptor extends ClassVisitor {
             }
             declaring = reader.getSuperName();
         }
-        return label(declaring, method, desc);
+        return label(declaring, method, desc, isstatic);
     }
 
     private boolean inherits(ClassReader reader, String method, String desc) {
@@ -89,10 +89,10 @@ final class CallInterceptor extends ClassVisitor {
         return found[0];
     }
 
-    private static String label(String owner, String method, String desc) {
+    private static String label(String owner, String method, String desc, boolean isstatic) {
         String args = Arrays.stream(Type.getArgumentTypes(desc)).map(t -> simple(t.getClassName())).collect(Collectors.joining(","));
         String type = simple(Type.getObjectType(owner).getClassName());
-        String name = method.equals("<init>") ? "new " + type : type + "." + method;
+        String name = method.equals("<init>") ? "new " + type : type + (isstatic ? "." : "#") + method;
         return name + "(" + args + ")";
     }
 
