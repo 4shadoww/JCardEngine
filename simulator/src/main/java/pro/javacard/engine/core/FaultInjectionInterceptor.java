@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 package pro.javacard.engine.core;
 
-import com.licel.jcardsim.base.Simulator;
 import org.objectweb.asm.*;
+import org.objectweb.asm.commons.InstructionAdapter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -61,14 +61,14 @@ public class FaultInjectionInterceptor extends ClassVisitor {
 
         // Add static fields if not already added
         if (!fieldsAdded) {
-            // Add boolean[] $faultFlips
-            FieldVisitor fv1 = super.visitField(Opcodes.ACC_STATIC | Opcodes.ACC_FINAL, "$faultFlips", "[Z", null, null);
+            // Add boolean[] __branch_flips
+            FieldVisitor fv1 = super.visitField(Opcodes.ACC_STATIC | Opcodes.ACC_FINAL, "__branch_flips", "[Z", null, null);
             if (fv1 != null) {
                 fv1.visitEnd();
             }
 
-            // Add int[] $faultIntFlips
-            FieldVisitor fv2 = super.visitField(Opcodes.ACC_STATIC | Opcodes.ACC_FINAL, "$faultIntFlips", "[I", null, null);
+            // Add int[] __switch_flips
+            FieldVisitor fv2 = super.visitField(Opcodes.ACC_STATIC | Opcodes.ACC_FINAL, "__switch_flips", "[I", null, null);
             if (fv2 != null) {
                 fv2.visitEnd();
             }
@@ -91,14 +91,13 @@ public class FaultInjectionInterceptor extends ClassVisitor {
     }
 
     private void injectFaultArrayInitialization(MethodVisitor mv) {
-        var simclass = Simulator.class.getCanonicalName().replace(".", "/");
-        // $faultFlips = Simulator.getFaultFlipsArray();
-        mv.visitMethodInsn(Opcodes.INVOKESTATIC, simclass, "getFaultFlipsArray", "()[Z", false);
-        mv.visitFieldInsn(Opcodes.PUTSTATIC, currentClassName, "$faultFlips", "[Z");
+        // __branch_flips = Simulator.__get_branch_flips();
+        mv.visitMethodInsn(Opcodes.INVOKESTATIC, BytecodeUtils.SIMULATOR, "__get_branch_flips", "()[Z", false);
+        mv.visitFieldInsn(Opcodes.PUTSTATIC, currentClassName, "__branch_flips", "[Z");
 
-        // $faultIntFlips = Simulator.getFaultIntFlipsArray();
-        mv.visitMethodInsn(Opcodes.INVOKESTATIC, simclass, "getFaultIntFlipsArray", "()[I", false);
-        mv.visitFieldInsn(Opcodes.PUTSTATIC, currentClassName, "$faultIntFlips", "[I");
+        // __switch_flips = Simulator.__get_switch_flips();
+        mv.visitMethodInsn(Opcodes.INVOKESTATIC, BytecodeUtils.SIMULATOR, "__get_switch_flips", "()[I", false);
+        mv.visitFieldInsn(Opcodes.PUTSTATIC, currentClassName, "__switch_flips", "[I");
     }
 
     private static class StaticInitializerWrapper extends MethodVisitor {
@@ -113,17 +112,15 @@ public class FaultInjectionInterceptor extends ClassVisitor {
         @Override
         public void visitCode() {
             super.visitCode();
-            var simclass = Simulator.class.getCanonicalName().replace(".", "/");
-
             // Inject our initialization at the very beginning
             if (!initialized) {
-                // $faultFlips = Simulator.getFaultFlipsArray();
-                super.visitMethodInsn(Opcodes.INVOKESTATIC, simclass, "getFaultFlipsArray", "()[Z", false);
-                super.visitFieldInsn(Opcodes.PUTSTATIC, className, "$faultFlips", "[Z");
+                // __branch_flips = Simulator.__get_branch_flips();
+                super.visitMethodInsn(Opcodes.INVOKESTATIC, BytecodeUtils.SIMULATOR, "__get_branch_flips", "()[Z", false);
+                super.visitFieldInsn(Opcodes.PUTSTATIC, className, "__branch_flips", "[Z");
 
-                // $faultIntFlips = Simulator.getFaultIntFlipsArray();
-                super.visitMethodInsn(Opcodes.INVOKESTATIC, simclass, "getFaultIntFlipsArray", "()[I", false);
-                super.visitFieldInsn(Opcodes.PUTSTATIC, className, "$faultIntFlips", "[I");
+                // __switch_flips = Simulator.__get_switch_flips();
+                super.visitMethodInsn(Opcodes.INVOKESTATIC, BytecodeUtils.SIMULATOR, "__get_switch_flips", "()[I", false);
+                super.visitFieldInsn(Opcodes.PUTSTATIC, className, "__switch_flips", "[I");
 
                 initialized = true;
             }
@@ -132,11 +129,13 @@ public class FaultInjectionInterceptor extends ClassVisitor {
 
     private static class FaultInjectionMethodVisitor extends MethodVisitor {
         private final String className;
+        private final InstructionAdapter asm;
         private int currentLine = -1;
 
         public FaultInjectionMethodVisitor(MethodVisitor methodVisitor, String className) {
             super(Opcodes.ASM9, methodVisitor);
             this.className = className;
+            this.asm = new InstructionAdapter(methodVisitor);
         }
 
         @Override
@@ -169,7 +168,7 @@ public class FaultInjectionInterceptor extends ClassVisitor {
         private void injectConditionalFlip(int opcode, Label label) {
             log.trace("Injecting conditional flip {}:{} for opcode {}", className, currentLine, opcode);
 
-            // Strategy: Evaluate condition to boolean, XOR with $faultFlips[line], then jump
+            // Strategy: Evaluate condition to boolean, XOR with __branch_flips[line], then jump
 
             // Step 1: Evaluate original condition to boolean (0 or 1)
             Label trueLabel = new Label();
@@ -182,10 +181,10 @@ public class FaultInjectionInterceptor extends ClassVisitor {
             super.visitInsn(Opcodes.ICONST_1); // true
             super.visitLabel(evalEnd);
 
-            // Step 2: XOR with $faultFlips[currentLine]
+            // Step 2: XOR with __branch_flips[currentLine]
             if (currentLine >= 0) {
-                super.visitFieldInsn(Opcodes.GETSTATIC, className, "$faultFlips", "[Z");
-                pushInt(currentLine);
+                super.visitFieldInsn(Opcodes.GETSTATIC, className, "__branch_flips", "[Z");
+                asm.iconst(currentLine);
                 super.visitInsn(Opcodes.BALOAD); // Load boolean as 0 or 1
                 super.visitInsn(Opcodes.IXOR);   // XOR: flips result if fault is enabled
             }
@@ -198,10 +197,10 @@ public class FaultInjectionInterceptor extends ClassVisitor {
         public void visitTableSwitchInsn(int min, int max, Label dflt, Label... labels) {
             log.trace("Injecting switch flip at {}:{}", className, currentLine);
 
-            // Add $faultIntFlips[currentLine] to the switch value
+            // Add __switch_flips[currentLine] to the switch value
             if (currentLine >= 0) {
-                super.visitFieldInsn(Opcodes.GETSTATIC, className, "$faultIntFlips", "[I");
-                pushInt(currentLine);
+                super.visitFieldInsn(Opcodes.GETSTATIC, className, "__switch_flips", "[I");
+                asm.iconst(currentLine);
                 super.visitInsn(Opcodes.IALOAD); // Load int offset
                 super.visitInsn(Opcodes.IADD);   // value + offset
             }
@@ -213,27 +212,15 @@ public class FaultInjectionInterceptor extends ClassVisitor {
         public void visitLookupSwitchInsn(Label dflt, int[] keys, Label[] labels) {
             log.trace("Injecting switch flip at {}:{}", className, currentLine);
 
-            // Add $faultIntFlips[currentLine] to the switch value
+            // Add __switch_flips[currentLine] to the switch value
             if (currentLine >= 0) {
-                super.visitFieldInsn(Opcodes.GETSTATIC, className, "$faultIntFlips", "[I");
-                pushInt(currentLine);
+                super.visitFieldInsn(Opcodes.GETSTATIC, className, "__switch_flips", "[I");
+                asm.iconst(currentLine);
                 super.visitInsn(Opcodes.IALOAD);
                 super.visitInsn(Opcodes.IADD);
             }
 
             super.visitLookupSwitchInsn(dflt, keys, labels);
-        }
-
-        private void pushInt(int value) {
-            if (value >= -1 && value <= 5) {
-                super.visitInsn(Opcodes.ICONST_0 + value);
-            } else if (value >= Byte.MIN_VALUE && value <= Byte.MAX_VALUE) {
-                super.visitIntInsn(Opcodes.BIPUSH, value);
-            } else if (value >= Short.MIN_VALUE && value <= Short.MAX_VALUE) {
-                super.visitIntInsn(Opcodes.SIPUSH, value);
-            } else {
-                super.visitLdcInsn(value);
-            }
         }
     }
 }

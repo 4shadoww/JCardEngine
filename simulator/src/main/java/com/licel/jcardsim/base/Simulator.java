@@ -5,6 +5,7 @@ package com.licel.jcardsim.base;
 
 import apdu4j.core.BIBO;
 import apdu4j.core.CommandAPDU;
+import apdu4j.prefs.Preferences;
 import pro.javacard.engine.core.DeterministicRandom;
 import com.licel.jcardsim.utils.AIDUtil;
 import javacard.framework.*;
@@ -14,6 +15,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import pro.javacard.engine.JavaCardEngine;
 import pro.javacard.engine.JavaCardEngineException;
+import pro.javacard.engine.core.CallLog;
 import pro.javacard.engine.core.ContextStackProxy;
 import pro.javacard.engine.core.DependencyAnalyzer;
 import pro.javacard.engine.core.Faulty;
@@ -111,25 +113,28 @@ public class Simulator implements JavaCardEngine, JavaCardRuntime {
     // Regex over the recorded comment lines; null loads applet classes without the trace calls
     private final Pattern trace;
 
-    private final Map<String, Integer> callcount;
+    private final CallLog calls;
 
-    public Simulator(ClassLoader loader, FaultyConfig faultConfig, GlobalPlatformEngine globalPlatform, Long seed, Pattern trace, Set<Feature> features) {
+    public Simulator(ClassLoader loader, GlobalPlatformEngine globalPlatform, FaultyConfig faultConfig, Preferences preferences) {
         this.transientMemory = new TransientMemory();
         this.globalPlatform = globalPlatform;
         this.currentAPDU = new CurrentAPDU(transientMemory);
-        var loaderFeatures = EnumSet.noneOf(Feature.class);
-        loaderFeatures.addAll(features);
+        this.faultConfig = faultConfig;
+        this.rng = preferences.valueOf(JavaCardEngine.RNG_SEED).<SecureRandom>map(DeterministicRandom::new).orElseGet(SecureRandom::new);
+        this.trace = preferences.valueOf(JavaCardEngine.TRACE_FILTER).map(Pattern::compile).orElse(null);
+        this.calls = preferences.valueOf(JavaCardEngine.CALLS).map(CallLog::new).orElse(null);
+
+        var features = EnumSet.noneOf(Feature.class);
         if (trace != null) {
-            loaderFeatures.add(Feature.TRACE);
+            features.add(Feature.TRACE);
+        }
+        if (calls != null) {
+            features.add(Feature.CALLS);
         }
         if (faultConfig != null) {
-            loaderFeatures.add(Feature.FAULTY);
+            features.add(Feature.FAULTY);
         }
-        this.classLoader = new IsolatingClassReloader(loader, loaderFeatures);
-        this.faultConfig = faultConfig;
-        this.rng = seed == null ? new SecureRandom() : new DeterministicRandom(seed);
-        this.trace = trace;
-        this.callcount = features.contains(Feature.CALLCOUNT) ? new HashMap<>() : null;
+        this.classLoader = new IsolatingClassReloader(loader, features);
     }
 
     @Override
@@ -151,7 +156,14 @@ public class Simulator implements JavaCardEngine, JavaCardRuntime {
     // Use in try-with-resources block to have this simulator instance as current simulator
     public CurrentSimulator asCurrent() {
         currentSimulator.set(this);
-        return currentSimulator::remove;
+        return this::endScope;
+    }
+
+    private void endScope() {
+        if (calls != null) {
+            calls.report();
+        }
+        currentSimulator.remove();
     }
 
     @Override
@@ -235,24 +247,24 @@ public class Simulator implements JavaCardEngine, JavaCardRuntime {
     // Sink of the comment lines CommentTraceInterceptor injects into applet code
     private static final Logger tracelog = LoggerFactory.getLogger("pro.javacard.engine.trace");
 
-    // Called from instrumented applet code, see CommentTrace; silent outside a card
-    @SuppressWarnings("unused")
-    public static void trace(String line) {
+    @SuppressWarnings("unused") // used from intercept
+    public static void __trace(String line) {
         Simulator current = currentSimulator.get();
         if (current != null && current.trace.matcher(line).find()) {
             tracelog.info(line);
         }
     }
 
-    private static final Logger callcountlog = LoggerFactory.getLogger("pro.javacard.engine.callcount");
-
     @SuppressWarnings("unused") // used from intercept
-    public static void callcount(String method) {
-        currentSimulator.get().callcount.merge(method, 1, Integer::sum);
+    public static void __call(String label) {
+        Simulator current = currentSimulator.get();
+        if (current != null) {
+            current.calls.record(label);
+        }
     }
 
     @SuppressWarnings("unused") // used from intercept
-    public static byte[] allocateBytes(int size) {
+    public static byte[] __allocate_bytes(int size) {
         Simulator current = (Simulator) current();
         byte[] v = current.getTransientMemory().makeByteArray(size, JCSystem.MEMORY_TYPE_PERSISTENT, null);
         current.registerAllocation(v);
@@ -260,7 +272,7 @@ public class Simulator implements JavaCardEngine, JavaCardRuntime {
     }
 
     @SuppressWarnings("unused") // used from intercept
-    public static short[] allocateShorts(int size) {
+    public static short[] __allocate_shorts(int size) {
         log.debug("Allocating short array");
         Simulator current = (Simulator) current();
         var v = current.getTransientMemory().makeShortArray((short) size, JCSystem.MEMORY_TYPE_PERSISTENT, null);
@@ -269,18 +281,12 @@ public class Simulator implements JavaCardEngine, JavaCardRuntime {
     }
 
     @SuppressWarnings("unused") // used from intercept
-    public static boolean[] allocateBooleans(int size) {
+    public static boolean[] __allocate_booleans(int size) {
         log.debug("Allocating boolean array");
         Simulator current = (Simulator) current();
         var v = current.getTransientMemory().makeBooleanArray((short) size, JCSystem.MEMORY_TYPE_PERSISTENT, null);
         current.registerAllocation(v);
         return v;
-    }
-
-    @SuppressWarnings("unused") // used from intercept
-    public static void trackAllocation(Object array) {
-        Simulator current = (Simulator) current();
-        current.registerAllocation(array);
     }
 
     private void registerAllocation(Object array) {
@@ -614,15 +620,6 @@ public class Simulator implements JavaCardEngine, JavaCardRuntime {
             }
 
             return response;
-        } finally {
-            if (callcount != null && !callcount.isEmpty()) {
-                var report = new StringBuilder();
-                callcount.entrySet().stream()
-                        .sorted(Map.Entry.<String, Integer>comparingByValue().reversed().thenComparing(Map.Entry.comparingByKey()))
-                        .forEach(e -> report.append(String.format("%n%6d %s", e.getValue(), e.getKey())));
-                callcountlog.info("calls:{}", report);
-                callcount.clear();
-            }
         }
     }
 
@@ -1118,7 +1115,7 @@ public class Simulator implements JavaCardEngine, JavaCardRuntime {
     private final HashMap<String, int[]> switch_flips = new HashMap<>();
 
     @SuppressWarnings("unused") // used from intercept
-    public static boolean[] getFaultFlipsArray() {
+    public static boolean[] __get_branch_flips() {
         var current = currentSimulator.get();
         var className = getCallingClassName();
         var r = current.branch_flips.computeIfAbsent(className, k -> new boolean[MAX_LINE_NUMBER]);
@@ -1126,7 +1123,7 @@ public class Simulator implements JavaCardEngine, JavaCardRuntime {
     }
 
     @SuppressWarnings("unused") // used from intercept
-    public static int[] getFaultIntFlipsArray() {
+    public static int[] __get_switch_flips() {
         var current = currentSimulator.get();
         var className = getCallingClassName();
         var r = current.switch_flips.computeIfAbsent(className, k -> new int[MAX_LINE_NUMBER]);

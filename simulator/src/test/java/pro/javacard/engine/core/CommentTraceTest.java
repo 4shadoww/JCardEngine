@@ -21,9 +21,11 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
+import java.util.stream.Collectors;
 
 import static org.testng.Assert.*;
 
@@ -31,8 +33,7 @@ public class CommentTraceTest {
     private static final String AID_HEX = "D23300000077" + "4D454D2D3031" + "01";
     private static final Pattern TRACE = Pattern.compile("MemoryApplet\\.java:\\d+ (//.*)$");
     private static final String UNPROCESSED = "No CommentTrace attribute";
-    private static final Pattern CALLCOUNT = Pattern.compile("callcount - calls:$");
-    private static final Pattern CALLED = Pattern.compile("^ +(\\d+) \\S+$");
+    private static final Pattern CALLED = Pattern.compile("^ +(\\d+ )?(new )?\\S+$");
 
     private static List<String> stderr(Runnable body) {
         var buf = new ByteArrayOutputStream();
@@ -67,26 +68,53 @@ public class CommentTraceTest {
         return log.stream().map(TRACE::matcher).filter(Matcher::find).map(m -> m.group(1)).toList();
     }
 
-    @Test
-    public void callCountsPerApdu() {
-        assertFalse(run(Preferences.of()).stream().anyMatch(l -> CALLCOUNT.matcher(l).find()));
-
+    private static List<List<String>> reports(List<String> log, String mode) {
+        var header = Pattern.compile("trace - " + mode + ":$");
         List<List<String>> reports = new ArrayList<>();
-        for (String line : run(Preferences.of(JavaCardEngine.CALLCOUNT, true))) {
-            if (CALLCOUNT.matcher(line).find()) {
+        for (String line : log) {
+            if (header.matcher(line).find()) {
                 reports.add(new ArrayList<>());
             } else if (!reports.isEmpty() && CALLED.matcher(line).matches()) {
                 reports.get(reports.size() - 1).add(line.trim());
             }
         }
-        assertEquals(reports.size(), 6);
-        for (List<String> r : reports) {
+        return reports;
+    }
+
+    @Test
+    public void callsPerApdu() {
+        assertFalse(run(Preferences.of()).stream().anyMatch(l -> l.contains("trace - ")));
+
+        var counted = reports(run(Preferences.of(JavaCardEngine.CALLS, CallLog.Mode.COUNT)), "counts");
+        assertEquals(counted.size(), 7);
+        assertTrue(counted.get(0).contains("1 MemoryApplet.install(byte[],short,byte)"), counted.get(0).toString());
+        for (List<String> r : counted.subList(1, counted.size())) {
             List<Integer> counts = r.stream().map(l -> Integer.valueOf(l.substring(0, l.indexOf(' ')))).toList();
             assertEquals(counts, counts.stream().sorted(Comparator.reverseOrder()).toList(), r.toString());
             assertTrue(r.contains("1 MemoryApplet.process(APDU)"), r.toString());
             assertTrue(r.contains("1 Applet.selectingApplet()"), r.toString());
         }
-        assertTrue(reports.stream().anyMatch(r -> !r.get(0).startsWith("1 ")), reports.toString());
+        assertTrue(counted.stream().anyMatch(r -> !r.get(0).startsWith("1 ")), counted.toString());
+
+        var lines = counted.stream().flatMap(List::stream).toList();
+        assertTrue(lines.contains("1 MemoryApplet$Extended.extract(byte[],short)"), lines.toString());
+        assertFalse(lines.stream().anyMatch(l -> l.contains("Object.")), lines.toString());
+
+        var traced = reports(run(Preferences.of(JavaCardEngine.CALLS, CallLog.Mode.TRACE)), "calls");
+        assertEquals(traced.size(), counted.size());
+        for (List<String> r : traced.subList(1, traced.size())) {
+            assertTrue(r.indexOf("MemoryApplet.process(APDU)") < r.indexOf("Applet.selectingApplet()"), r.toString());
+        }
+        var tracetotals = traced.stream().map(r -> r.stream().collect(Collectors.groupingBy(Function.identity(), Collectors.counting()))).toList();
+        var counttotals = counted.stream().map(r -> r.stream().collect(Collectors.toMap(l -> l.substring(l.indexOf(' ') + 1), l -> Long.valueOf(l.substring(0, l.indexOf(' ')))))).toList();
+        assertEquals(tracetotals, counttotals);
+
+        // stream drops the per-scope report and puts calls and comments on one logger in execution order
+        var streamed = run(Preferences.of(JavaCardEngine.CALLS, CallLog.Mode.STREAM, JavaCardEngine.TRACE_FILTER, "."))
+                .stream().filter(l -> l.contains("trace - ")).map(l -> l.substring(l.indexOf("trace - ") + 8)).toList();
+        var dispatch = streamed.stream().filter(l -> l.endsWith("// step: Dispatch on INS")).findFirst().orElseThrow();
+        assertTrue(streamed.indexOf("MemoryApplet.process(APDU)") < streamed.indexOf(dispatch), streamed.toString());
+        assertTrue(streamed.indexOf(dispatch) < streamed.indexOf("APDU.getBuffer()"), streamed.toString());
     }
 
     @Test

@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 package pro.javacard.engine.core;
 
+// Class mangling features: what gets injected into applet classes at load time
 public enum Feature {
     TRACE,
-    CALLCOUNT,
+    CALLS,
     FAULTY
 }

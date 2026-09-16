@@ -14,11 +14,13 @@ public class MemoryApplet extends Applet {
     private static final byte P2_EXTENDED = (byte) 0x00;
     private static final byte P2_LEGACY   = (byte) 0x01;
 
-    // Available memory readings in one of the two JCSystem formats, plus the GC request that frees some
-    interface Report {
+    interface Readings {
         // Writes the readings to dst at offset and returns their length
         short extract(byte[] dst, short offset);
+    }
 
+    // Available memory readings in one of the two JCSystem formats, plus the GC request that frees some
+    interface Report extends Readings {
         void gc();
     }
 

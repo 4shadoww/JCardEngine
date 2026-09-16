@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 package pro.javacard.engine.core;
 
-import com.licel.jcardsim.base.Simulator;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.MethodVisitor;
@@ -12,13 +11,12 @@ import org.objectweb.asm.Type;
 import java.util.Arrays;
 import java.util.stream.Collectors;
 
-final class CallCountInterceptor extends ClassVisitor {
-    private static final String SIMULATOR = Type.getInternalName(Simulator.class);
-
+final class CallInterceptor extends ClassVisitor {
     private final IsolatingClassReloader loader;
     private String type;
+    private String parent;
 
-    CallCountInterceptor(ClassVisitor classVisitor, IsolatingClassReloader loader) {
+    CallInterceptor(ClassVisitor classVisitor, IsolatingClassReloader loader) {
         super(Opcodes.ASM9, classVisitor);
         this.loader = loader;
     }
@@ -27,30 +25,27 @@ final class CallCountInterceptor extends ClassVisitor {
     public void visit(int version, int access, String name, String signature, String superName, String[] interfaces) {
         super.visit(version, access, name, signature, superName, interfaces);
         this.type = name;
+        this.parent = superName;
     }
 
     @Override
     public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
         String self = label(type, name, descriptor);
+        String superctor = name.equals("<init>") ? parent : null;
         return new MethodVisitor(Opcodes.ASM9, super.visitMethod(access, name, descriptor, signature, exceptions)) {
             @Override
             public void visitCode() {
                 super.visitCode();
-                count(self);
+                BytecodeUtils.callback(mv, "__call", self);
             }
 
             @Override
             public void visitMethodInsn(int opcode, String owner, String method, String desc, boolean isInterface) {
-                String callee = callee(owner, method, desc);
+                String callee = owner.equals(superctor) && method.equals("<init>") ? null : callee(owner, method, desc);
                 if (callee != null) {
-                    count(callee);
+                    BytecodeUtils.callback(mv, "__call", callee);
                 }
                 super.visitMethodInsn(opcode, owner, method, desc, isInterface);
-            }
-
-            private void count(String label) {
-                super.visitLdcInsn(label);
-                super.visitMethodInsn(Opcodes.INVOKESTATIC, SIMULATOR, "callcount", "(Ljava/lang/String;)V", false);
             }
         };
     }
@@ -59,12 +54,27 @@ final class CallCountInterceptor extends ClassVisitor {
         String declaring = owner;
         while (loader.isolates(declaring)) {
             ClassReader reader = BytecodeUtils.reader(loader, declaring);
-            if (declares(reader, method, desc)) {
+            if (declares(reader, method, desc) || inherits(reader, method, desc)) {
                 return null;
+            }
+            if ((reader.getAccess() & Opcodes.ACC_INTERFACE) != 0) {
+                break;
             }
             declaring = reader.getSuperName();
         }
         return label(declaring, method, desc);
+    }
+
+    private boolean inherits(ClassReader reader, String method, String desc) {
+        for (String iface : reader.getInterfaces()) {
+            if (loader.isolates(iface)) {
+                ClassReader parent = BytecodeUtils.reader(loader, iface);
+                if (declares(parent, method, desc) || inherits(parent, method, desc)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private static boolean declares(ClassReader reader, String method, String desc) {
@@ -81,7 +91,9 @@ final class CallCountInterceptor extends ClassVisitor {
 
     private static String label(String owner, String method, String desc) {
         String args = Arrays.stream(Type.getArgumentTypes(desc)).map(t -> simple(t.getClassName())).collect(Collectors.joining(","));
-        return simple(Type.getObjectType(owner).getClassName()) + "." + method + "(" + args + ")";
+        String type = simple(Type.getObjectType(owner).getClassName());
+        String name = method.equals("<init>") ? "new " + type : type + "." + method;
+        return name + "(" + args + ")";
     }
 
     private static String simple(String className) {

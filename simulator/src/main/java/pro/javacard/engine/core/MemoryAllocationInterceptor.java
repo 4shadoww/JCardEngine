@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 package pro.javacard.engine.core;
 
-import com.licel.jcardsim.base.Simulator;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.FieldVisitor;
 import org.objectweb.asm.MethodVisitor;
@@ -55,23 +54,19 @@ public class MemoryAllocationInterceptor extends ClassVisitor {
                 String method = null;
                 String desc = null;
                 if (operand == Opcodes.T_BYTE) {
-                    method = "allocateBytes";
+                    method = "__allocate_bytes";
                     desc = "(I)[B";
                 } else if (operand == Opcodes.T_BOOLEAN) {
-                    method = "allocateBooleans";
+                    method = "__allocate_booleans";
                     desc = "(I)[Z";
                 } else if (operand == Opcodes.T_SHORT) {
-                    method = "allocateShorts";
+                    method = "__allocate_shorts";
                     desc = "(I)[S";
                 }
 
                 if (method != null) {
                     log.trace("Intercepting new array {}", method);
-                    super.visitMethodInsn(Opcodes.INVOKESTATIC,
-                            Simulator.class.getCanonicalName().replace(".", "/"),
-                            method,
-                            desc,
-                            false);
+                    super.visitMethodInsn(Opcodes.INVOKESTATIC, BytecodeUtils.SIMULATOR, method, desc, false);
                     return;
                 }
             }

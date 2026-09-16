@@ -2,10 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 package pro.javacard.engine.core;
 
+import com.licel.jcardsim.base.Simulator;
 import org.objectweb.asm.Attribute;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.MethodVisitor;
+import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -16,6 +20,8 @@ import java.util.HashSet;
 
 public final class BytecodeUtils {
     private static final Logger log = LoggerFactory.getLogger(BytecodeUtils.class);
+
+    static final String SIMULATOR = Type.getInternalName(Simulator.class);
 
     public static byte[] transform(byte[] classBytes, IsolatingClassReloader loader) {
         ClassReader classReader = new ClassReader(classBytes);
@@ -28,8 +34,8 @@ public final class BytecodeUtils {
         if (loader.features.contains(Feature.FAULTY)) {
             chain = new FaultInjectionInterceptor(chain);
         }
-        if (loader.features.contains(Feature.CALLCOUNT)) {
-            chain = new CallCountInterceptor(chain, loader);
+        if (loader.features.contains(Feature.CALLS)) {
+            chain = new CallInterceptor(chain, loader);
         }
         classReader.accept(chain, new Attribute[]{CommentTraceAttribute.PROTOTYPE}, 0);
 
@@ -76,6 +82,11 @@ public final class BytecodeUtils {
             }
             return reader(classLoader, type).getSuperName();
         }
+    }
+
+    static void callback(MethodVisitor mv, String method, String argument) {
+        mv.visitLdcInsn(argument);
+        mv.visitMethodInsn(Opcodes.INVOKESTATIC, SIMULATOR, method, "(Ljava/lang/String;)V", false);
     }
 
     static ClassReader reader(ClassLoader classLoader, String type) {

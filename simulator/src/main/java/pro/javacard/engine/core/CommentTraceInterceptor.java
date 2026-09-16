@@ -2,13 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 package pro.javacard.engine.core;
 
-import com.licel.jcardsim.base.Simulator;
 import org.objectweb.asm.Attribute;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
-import org.objectweb.asm.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,7 +24,6 @@ import java.util.stream.Collectors;
 // built with the trace goal and is reported once, when it loads.
 public final class CommentTraceInterceptor extends ClassVisitor {
     private static final Logger log = LoggerFactory.getLogger(CommentTraceInterceptor.class);
-    private static final String SIMULATOR = Type.getInternalName(Simulator.class);
 
     private String name;
     private Map<Integer, List<Line>> byLine;
@@ -77,7 +74,7 @@ public final class CommentTraceInterceptor extends ClassVisitor {
                 boolean once = false;
                 for (Line l : lines) {
                     if (l.once()) {
-                        trace(l);
+                        BytecodeUtils.callback(mv, "__trace", l.text());
                         once = true;
                     }
                 }
@@ -88,7 +85,7 @@ public final class CommentTraceInterceptor extends ClassVisitor {
                 }
                 for (Line l : lines) {
                     if (!l.once()) {
-                        trace(l);
+                        BytecodeUtils.callback(mv, "__trace", l.text());
                     }
                 }
             }
@@ -96,11 +93,6 @@ public final class CommentTraceInterceptor extends ClassVisitor {
             @Override
             public void visitJumpInsn(int opcode, Label label) {
                 super.visitJumpInsn(opcode, redirect.getOrDefault(label, label));
-            }
-
-            private void trace(Line l) {
-                super.visitLdcInsn(l.text());
-                super.visitMethodInsn(Opcodes.INVOKESTATIC, SIMULATOR, "trace", "(Ljava/lang/String;)V", false);
             }
         };
     }

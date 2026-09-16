@@ -43,8 +43,8 @@ final class ByteContainer {
                 this.len = JCSystem.makeTransientShortArray((short) 1, JCSystem.CLEAR_ON_RESET);
             }
             default -> {
-                this.data = Simulator.allocateBytes(fixedSize);
-                this.len = Simulator.allocateShorts(1);
+                this.data = Simulator.__allocate_bytes(fixedSize);
+                this.len = Simulator.__allocate_shorts(1);
             }
         }
     }
