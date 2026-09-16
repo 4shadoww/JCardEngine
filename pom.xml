@@ -241,6 +241,8 @@
                     <artifactId>rewrite-maven-plugin</artifactId>
                     <version>6.46.1</version>
                     <configuration>
+                        <!-- All recipes are Java rules that need no POM model -->
+                        <skipMavenParsing>true</skipMavenParsing>
                         <activeRecipes>
                             <!-- Braces / style -->
                             <recipe>org.openrewrite.staticanalysis.NeedBraces</recipe>
