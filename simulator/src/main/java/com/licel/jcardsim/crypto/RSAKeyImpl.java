@@ -21,6 +21,9 @@ public class RSAKeyImpl extends KeyWithParameters implements RSAPrivateKey, RSAP
 
     public RSAKeyImpl(byte keyType, short size, byte memoryType) {
         super(keyType, size, memoryType);
+        if (size < 0 || size > KeyBuilder.LENGTH_RSA_4096) {
+            CryptoException.throwIt(CryptoException.NO_SUCH_ALGORITHM);
+        }
         modulus = new ByteContainer(memoryType, size / 8);
         exponent = new ByteContainer(memoryType, size / 8, !isPrivate());
     }

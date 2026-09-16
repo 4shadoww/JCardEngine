@@ -121,6 +121,11 @@ public class KeyPairImplTest extends SimulatorCoreTest {
      */
     @Test
     public void testGenKeyPairRSAWithCustomPublicExponent() {
+        for (byte type : new byte[]{KeyBuilder.TYPE_RSA_PUBLIC, KeyBuilder.TYPE_RSA_PRIVATE, KeyBuilder.TYPE_RSA_CRT_PRIVATE}) {
+            for (short size : new short[]{-1, KeyBuilder.LENGTH_RSA_4096 + 1}) {
+                assertEquals(expectThrows(CryptoException.class, () -> KeyBuilder.buildKey(type, size, false)).getReason(), CryptoException.NO_SUCH_ALGORITHM);
+            }
+        }
         byte[] customExponent = new byte[]{(byte) 0x03};
         RSAPublicKey publicKey = (RSAPublicKey) KeyBuilder.buildKey(KeyBuilder.TYPE_RSA_PUBLIC, KeyBuilder.LENGTH_RSA_1024, false);
         KeyPair instance = new KeyPair(publicKey, null);
