@@ -9,7 +9,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.security.SecureClassLoader;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -23,6 +25,7 @@ public final class IsolatingClassReloader extends SecureClassLoader {
 
     private final Set<String> isolated = new HashSet<>();
     final EnumSet<Feature> features;
+    public final Map<String, Integer> sizes = new HashMap<>();
 
     public Class<?> reloadAndIsolate(Class<?> clazz) throws ClassNotFoundException {
         // Add package to isolated list

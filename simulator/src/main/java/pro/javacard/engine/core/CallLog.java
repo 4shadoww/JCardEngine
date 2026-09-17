@@ -37,26 +37,29 @@ public final class CallLog {
         calls.add(label);
     }
 
-    public void report() {
+    public void report(Map<String, Integer> sizes) {
         if (calls.isEmpty()) {
             return;
         }
         if (mode == Mode.COUNT) {
-            log.info("counts:{}", indented(counted()));
+            log.info("counts:{}", indented(counted(sizes)));
         } else {
             log.info("calls:{}", indented(calls));
         }
         calls.clear();
     }
 
-    private List<String> counted() {
+    private List<String> counted(Map<String, Integer> sizes) {
         var totals = new HashMap<String, Integer>();
         for (String call : calls) {
             totals.merge(call, 1, Integer::sum);
         }
         return totals.entrySet().stream()
                 .sorted(Map.Entry.<String, Integer>comparingByValue().reversed().thenComparing(Map.Entry.comparingByKey()))
-                .map(e -> String.format("%5d %s", e.getValue(), e.getKey()))
+                .map(e -> {
+                    String line = String.format("%5d %s", e.getValue(), e.getKey());
+                    return sizes.containsKey(e.getKey()) ? line + " " + sizes.get(e.getKey()) : line;
+                })
                 .toList();
     }
 

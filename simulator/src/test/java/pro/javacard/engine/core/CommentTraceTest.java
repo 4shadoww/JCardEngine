@@ -33,7 +33,7 @@ public class CommentTraceTest {
     private static final String AID_HEX = "D23300000077" + "4D454D2D3031" + "01";
     private static final Pattern TRACE = Pattern.compile("\\w+\\.java:\\d+ (//.*)$");
     private static final String UNPROCESSED = "No CommentTrace attribute";
-    private static final Pattern CALLED = Pattern.compile("^ +(\\d+ )?(new )?\\S+$");
+    private static final Pattern CALLED = Pattern.compile("^ +(\\d+ )?(new )?\\S+( \\d+)?$");
 
     private static List<String> stderr(Runnable body) {
         var buf = new ByteArrayOutputStream();
@@ -85,7 +85,8 @@ public class CommentTraceTest {
     public void callsPerApdu() {
         assertFalse(run(Preferences.of()).stream().anyMatch(l -> l.contains("trace - ")));
 
-        var counted = reports(run(Preferences.of(JavaCardEngine.CALLS, CallLog.Mode.COUNT)), "counts");
+        var sized = reports(run(Preferences.of(JavaCardEngine.CALLS, CallLog.Mode.COUNT)), "counts");
+        var counted = sized.stream().map(r -> r.stream().map(l -> l.substring(0, l.lastIndexOf(')') + 1)).toList()).toList();
         assertEquals(counted.size(), 7);
         assertTrue(counted.get(0).contains("1 MemoryApplet.install(byte[],short,byte)"), counted.get(0).toString());
         for (List<String> r : counted.subList(1, counted.size())) {
@@ -100,6 +101,10 @@ public class CommentTraceTest {
         assertTrue(lines.contains("1 MemoryApplet$Extended#extract(byte[],short)"), lines.toString());
         assertTrue(lines.contains("1 LegacyReport#extract(byte[],short)"), lines.toString());
         assertFalse(lines.stream().anyMatch(l -> l.contains("Object#")), lines.toString());
+        for (String l : sized.stream().flatMap(List::stream).toList()) {
+            assertEquals(l.endsWith(")"), !l.contains("MemoryApplet") && !l.contains("LegacyReport"), l);
+        }
+        assertTrue(sized.stream().anyMatch(r -> r.contains("1 LegacyReport#gc() 6")), sized.toString());
 
         var traced = reports(run(Preferences.of(JavaCardEngine.CALLS, CallLog.Mode.TRACE)), "calls");
         assertEquals(traced.size(), counted.size());

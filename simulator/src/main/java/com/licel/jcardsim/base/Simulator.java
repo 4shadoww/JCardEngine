@@ -161,7 +161,7 @@ public class Simulator implements JavaCardEngine, JavaCardRuntime {
 
     private void endScope() {
         if (calls != null) {
-            calls.report();
+            calls.report(classLoader.sizes);
         }
         currentSimulator.remove();
     }

@@ -7,6 +7,7 @@ import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
+import org.objectweb.asm.tree.ClassNode;
 
 import java.util.Arrays;
 import java.util.stream.Collectors;
@@ -26,6 +27,12 @@ final class CallInterceptor extends ClassVisitor {
         super.visit(version, access, name, signature, superName, interfaces);
         this.type = name;
         this.parent = superName;
+        var node = new ClassNode();
+        BytecodeUtils.reader(loader, name).accept(node, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+        for (var method : node.methods) {
+            long size = Arrays.stream(method.instructions.toArray()).filter(insn -> insn.getOpcode() >= 0).count();
+            loader.sizes.put(label(name, method.name, method.desc, (method.access & Opcodes.ACC_STATIC) != 0), (int) size);
+        }
     }
 
     @Override
