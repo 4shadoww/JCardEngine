@@ -53,35 +53,8 @@ public class MemoryApplet extends Applet {
         }
     }
 
-    // 16-bit readings via getAvailableMemory(byte), saturated at 32767
-    static final class Legacy implements Report {
-        private static final byte[] TYPES = {JCSystem.MEMORY_TYPE_PERSISTENT, JCSystem.MEMORY_TYPE_TRANSIENT_RESET, JCSystem.MEMORY_TYPE_TRANSIENT_DESELECT};
-
-        @Override
-        public short extract(byte[] dst, short offset) {
-            short i = 0;
-            // step: Three readings
-            while (i < TYPES.length) {
-                // step: One reading
-                Util.setShort(dst, (short) (offset + 2 * i), JCSystem.getAvailableMemory(TYPES[i]));
-                i++;
-            }
-            return 6;
-        }
-
-        @Override
-        public void gc() {
-            // step: A refused request surfaces as SystemException
-            try {
-                JCSystem.requestObjectDeletion();
-            } catch (SystemException e) {
-                ISOException.throwIt(ISO7816.SW_COMMAND_NOT_ALLOWED);
-            }
-        }
-    }
-
     private final Report extended = new Extended();
-    private final Report legacy = new Legacy();
+    private final Report legacy = new LegacyReport();
 
     // isTransient() and length of the install() bArray; both can only be queried while install() runs
     private final byte installBuffer;

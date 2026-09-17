@@ -31,7 +31,7 @@ import static org.testng.Assert.*;
 
 public class CommentTraceTest {
     private static final String AID_HEX = "D23300000077" + "4D454D2D3031" + "01";
-    private static final Pattern TRACE = Pattern.compile("MemoryApplet\\.java:\\d+ (//.*)$");
+    private static final Pattern TRACE = Pattern.compile("\\w+\\.java:\\d+ (//.*)$");
     private static final String UNPROCESSED = "No CommentTrace attribute";
     private static final Pattern CALLED = Pattern.compile("^ +(\\d+ )?(new )?\\S+$");
 
@@ -98,6 +98,7 @@ public class CommentTraceTest {
 
         var lines = counted.stream().flatMap(List::stream).toList();
         assertTrue(lines.contains("1 MemoryApplet$Extended#extract(byte[],short)"), lines.toString());
+        assertTrue(lines.contains("1 LegacyReport#extract(byte[],short)"), lines.toString());
         assertFalse(lines.stream().anyMatch(l -> l.contains("Object#")), lines.toString());
 
         var traced = reports(run(Preferences.of(JavaCardEngine.CALLS, CallLog.Mode.TRACE)), "calls");
@@ -171,8 +172,10 @@ public class CommentTraceTest {
         List<String> warnings = new ArrayList<>();
         try {
             CommentTrace.instrument(classes, List.of(Path.of("src/test/java")), out, StandardCharsets.UTF_8, warnings::add);
-            Path applet = Path.of("pro/javacard/engine/testapplets/MemoryApplet.class");
-            assertEquals(Files.readAllBytes(out.resolve(applet)), Files.readAllBytes(classes.resolve(applet)));
+            for (String name : List.of("MemoryApplet", "LegacyReport")) {
+                Path applet = Path.of("pro/javacard/engine/testapplets/" + name + ".class");
+                assertEquals(Files.readAllBytes(out.resolve(applet)), Files.readAllBytes(classes.resolve(applet)));
+            }
             // A processed class without body comments carries an empty attribute
             Path report = Path.of("pro/javacard/engine/testapplets/MemoryApplet$Report.class");
             assertEquals(Files.readAllBytes(out.resolve(report)), Files.readAllBytes(classes.resolve(report)));

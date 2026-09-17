@@ -7,7 +7,7 @@
     <!-- The task, like the jars below, comes from maven, so this file only runs under it. -->
     <taskdef name="javacard" classname="pro.javacard.ant.JavaCard" classpathref="maven.plugin.classpath"/>
     <javacard jckit="target/sdk">
-      <cap targetsdk="3.0.5" aid="D233000000774D454D2D3031" package="pro.javacard.engine.testapplets" version="0.1" output="target/MemoryApplet.cap" sources="src/test/java/pro/javacard/engine/testapplets" includes="**/MemoryApplet.java">
+      <cap targetsdk="3.0.5" aid="D233000000774D454D2D3031" package="pro.javacard.engine.testapplets" version="0.1" output="target/MemoryApplet.cap" sources="src/test/java/pro/javacard/engine/testapplets" includes="**/MemoryApplet.java,**/LegacyReport.java">
         <applet class="pro.javacard.engine.testapplets.MemoryApplet" aid="D233000000774D454D2D303101"/>
       </cap>
       <cap targetsdk="3.0.5" aid="D233000000774352592D3031" package="pro.javacard.engine.testapplets" version="0.1" output="target/CryptoProbeApplet.cap" sources="src/test/java/pro/javacard/engine/testapplets" includes="**/CryptoProbeApplet.java">
