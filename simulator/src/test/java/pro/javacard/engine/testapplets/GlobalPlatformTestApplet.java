@@ -31,6 +31,9 @@ public final class GlobalPlatformTestApplet extends Applet implements IdentitySh
     public static final byte INS_QUERY_PRIVS = (byte) 0x0B;   // getRegistryEntry(null).getPrivileges(buf, off)
     public static final byte INS_SIO_AIDS = (byte) 0x0C; // AIDs captured during getShareableInterfaceObject
     public static final byte INS_SC_CONTRACT = (byte) 0x0D; // SecureChannel unwrap/wrap/encryptData outcomes
+    // Unwrap the command, wrap(data||9000), send. JCRE does not wrap; this is the real-card path.
+    // P1 != 0 throws 6A80 after unwrap, with no wrap() - error SWs stay bare.
+    public static final byte INS_WRAP_ECHO = (byte) 0x0E;
     // Global PIN CVM driver. P1 sub-op: 0 status, 1 setTryLimit(P2), 2 update, 3 verify, 4 block,
     // 5 resetAndUnblock, 6 reset. P2 carries the CVM format (0 -> FORMAT_HEX) for update/verify.
     public static final byte INS_CVM = (byte) 0x66;
@@ -293,6 +296,20 @@ public final class GlobalPlatformTestApplet extends Applet implements IdentitySh
                     apdu.setOutgoingAndSend((short) 0, persoPrevAIDLen);
                     return;
                 }
+                case INS_WRAP_ECHO: {
+                    SecureChannel sc = GPSystem.getSecureChannel();
+                    short inlen = apdu.setIncomingAndReceive();
+                    sc.unwrap(buffer, (short) 0, (short) (apdu.getOffsetCdata() + inlen));
+                    if (buffer[ISO7816.OFFSET_P1] != 0) {
+                        ISOException.throwIt(ISO7816.SW_WRONG_DATA);
+                    }
+                    short lc = (short) (buffer[ISO7816.OFFSET_LC] & 0xFF);
+                    short off = apdu.getOffsetCdata();
+                    Util.setShort(buffer, (short) (off + lc), ISO7816.SW_NO_ERROR);
+                    short wrapped = sc.wrap(buffer, off, (short) (lc + 2));
+                    apdu.setOutgoingAndSend(off, wrapped);
+                    return;
+                }
                 case INS_SC_CONTRACT: {
                     // What the SecureChannel answers for a command carrying no secure messaging:
                     // unwrap length, wrap length, encryptData outcome. A status word thrown by any of
@@ -332,7 +349,14 @@ public final class GlobalPlatformTestApplet extends Applet implements IdentitySh
                     Util.setShort(buffer, (short) 2, wrapRc);
                     Util.setShort(buffer, (short) 4, encRc);
                     Util.setShort(buffer, (short) 6, nullRc);
-                    apdu.setOutgoingAndSend((short) 0, (short) 8);
+                    Util.setShort(buffer, (short) 8, ISO7816.SW_NO_ERROR);
+                    short outLen = (short) 8;
+                    try {
+                        outLen = sc.wrap(buffer, (short) 0, (short) 10);
+                    } catch (ISOException e) {
+                        // aborted session: wrap() of the probe itself fails; send the diagnostic plaintext
+                    }
+                    apdu.setOutgoingAndSend((short) 0, outLen);
                     return;
                 }
                 case INS_SIO_AIDS: {

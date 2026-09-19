@@ -12,7 +12,6 @@ import org.testng.annotations.Test;
 import pro.javacard.engine.JavaCardEngine;
 import pro.javacard.engine.testapplets.GlobalPlatformTestApplet;
 import pro.javacard.gp.GPCrypto;
-import pro.javacard.gp.GPData;
 import pro.javacard.gp.GPException;
 import pro.javacard.gp.GPKeyInfo;
 import pro.javacard.gp.GPRegistryEntry.Privilege;
@@ -46,9 +45,12 @@ public class InstallExecuteAndObserveTest {
                 {"SCP02-MAC", new SCPConfig.SCP02(), null, EnumSet.of(GPSession.APDUMode.MAC)},
                 {"SCP02-ENC", new SCPConfig.SCP02(), null, EnumSet.of(GPSession.APDUMode.ENC)},
                 {"SCP03-MAC", new SCPConfig.SCP03(), null, EnumSet.of(GPSession.APDUMode.MAC)},
+                {"SCP03-RMAC", new SCPConfig.SCP03(), null, EnumSet.of(GPSession.APDUMode.RMAC)},
                 {"SCP03-S16-ENC", new SCPConfig.SCP03(true), null, EnumSet.of(GPSession.APDUMode.ENC)},
+                {"SCP03-S16-RENC", new SCPConfig.SCP03(true), null, EnumSet.of(GPSession.APDUMode.RENC)},
                 {"Custom128-SCP03-ENC", new SCPConfig.SCP03(custom128), custom128, EnumSet.of(GPSession.APDUMode.ENC)},
-                {"Custom256-SCP03-ENC", new SCPConfig.SCP03(custom256), custom256, EnumSet.of(GPSession.APDUMode.ENC)}
+                {"Custom256-SCP03-ENC", new SCPConfig.SCP03(custom256), custom256, EnumSet.of(GPSession.APDUMode.ENC)},
+                {"Custom256-SCP03-RENC", new SCPConfig.SCP03(custom256), custom256, EnumSet.of(GPSession.APDUMode.RENC)}
         };
     }
 
@@ -78,10 +80,11 @@ public class InstallExecuteAndObserveTest {
             assertKit(gp, config);
         }
 
-        // Fresh session: CPLC via raw bibo, registry visibility for the planted SSD load file.
+        // Fresh session: CPLC via the open session (wrap() protects GET DATA when R-MAC is on),
+        // registry visibility for the planted SSD load file.
         try (var bibo = sim.connect()) {
             var gp = openWith(bibo, masterKey, mode);
-            assertCplc(bibo);
+            assertCplc(gp);
             assertSsdLoadFilePlanted(gp);
         }
 
@@ -150,7 +153,9 @@ public class InstallExecuteAndObserveTest {
             aids[i] = AIDUtil.create("0102030405060708%02X".formatted(0xC0 + i));
         }
         try (var bibo = sim.connect()) {
-            var gp = GPTestUtils.openIsd(bibo);
+            // R-ENCRYPTION (and the R-MAC it implies) wraps every 0x6310 continuation, so chunking
+            // is exercised with response protection, not only the C-MAC used by openIsd() elsewhere.
+            var gp = GPTestUtils.openIsd(bibo, EnumSet.of(GPSession.APDUMode.RENC));
             for (var aid : aids) {
                 installWith(gp, aid, EnumSet.noneOf(Privilege.class));
             }
@@ -230,6 +235,16 @@ public class InstallExecuteAndObserveTest {
             // selecting terminates it, and unwrap is back to passing commands through
             selectAID(bibo, A);
             assertEquals(probeSecureChannel(bibo)[0], 5);
+        }
+        try (var bibo = sim.connect()) {
+            var gp = GPSession.connect(bibo, gpAID(A));
+            gp.openSecureChannel(PlaintextKeys.defaultKey(), null, null, EnumSet.of(GPSession.APDUMode.RMAC));
+            // wrap() of four data bytes plus 9000 grows by the S16 R-MAC (freshEngine is SCP03 S16)
+            var r = gp.transmit(new CommandAPDU(0x00, GlobalPlatformTestApplet.INS_SC_CONTRACT, 0x00, 0x00, 256));
+            assertEquals(r.getSW(), 0x9000);
+            var data = r.getData();
+            int wrapRc = (data[2] & 0xFF) << 8 | (data[3] & 0xFF);
+            assertEquals(wrapRc, 20);
         }
         try (var bibo = sim.connect()) {
             selectAID(bibo, SecurityDomainApplet.OPEN_AID);
@@ -364,8 +379,10 @@ public class InstallExecuteAndObserveTest {
     // IC Fabricator (offset 3..4) = 0x4242 (engine signature).
     // IC Fab Date (13..14) and IC Batch ID (19..20) = 0x4242 (KDD-relevant).
     // IC Serial (15..18) = ASCII "JCEN" (KDD-relevant). Everything else zero.
-    private static void assertCplc(BIBO bibo) throws Exception {
-        var data = GPData.fetchCPLC(bibo);
+    private static void assertCplc(GPSession gp) throws Exception {
+        var r = gp.transmit(new CommandAPDU(0x80, 0xCA, 0x9F, 0x7F, 256));
+        assertEquals(r.getSW(), 0x9000);
+        var data = r.getData();
         assertEquals(data.length, 45);
         assertEquals(data[0], (byte) 0x9F);
         assertEquals(data[1], (byte) 0x7F);

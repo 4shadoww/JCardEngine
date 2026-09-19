@@ -223,11 +223,11 @@ public class KeyManagementTest {
         var pair = kpg.generateKeyPair();
         var sim = new JavaCardEngine.Builder().withSCP(cfgFactory.get()).build();
 
-        // A 2048-bit modulus is 256 bytes, so the MAC+ENC wrapped PUT KEY exceeds the short-APDU limit
+        // A 2048-bit modulus is 256 bytes, so the ENC+RENC wrapped PUT KEY exceeds the short-APDU limit
         // and gp-pro splits it into chained chunks (GPC v2.3.1 11.1.5.1); the SD must reassemble them
-        // before MAC-checking and decrypting. Storing the key end-to-end thus exercises chaining.
+        // before MAC-checking and decrypting, then R-MAC/R-ENCRYPT the PUT KEY response.
         try (var bibo = sim.connect()) {
-            var gp = openIsd(bibo, EnumSet.of(GPSession.APDUMode.MAC, GPSession.APDUMode.ENC));
+            var gp = openIsd(bibo, EnumSet.of(GPSession.APDUMode.ENC, GPSession.APDUMode.RENC));
             gp.putKey(pair.getPublic(), DM_TOKEN_KVN, false);
             var kit = gp.getKeyInfoTemplate();
             var rsa = kit.stream().filter(k -> k.getVersion() == DM_TOKEN_KVN).findFirst().orElseThrow();
@@ -239,11 +239,18 @@ public class KeyManagementTest {
         }
 
         // MAC-only (no ENC) also chains a 2048-bit key: covers reassembly without decryption, and
-        // proves SCP still opens with the factory keys after the chained loads.
+        // proves SCP still opens with the factory keys after the chained loads. R-MAC-only does the
+        // same for response protection without C-DECRYPTION.
         try (var bibo = sim.connect()) {
             var gp = openIsd(bibo, EnumSet.of(GPSession.APDUMode.MAC));
             gp.putKey(kpg.generateKeyPair().getPublic(), DM_TOKEN_KVN + 1, false);
             var rsa = gp.getKeyInfoTemplate().stream().filter(k -> k.getVersion() == DM_TOKEN_KVN + 1).findFirst().orElseThrow();
+            assertEquals(rsa.getType(), GPKeyInfo.GPKey.RSA_PUB_N);
+        }
+        try (var bibo = sim.connect()) {
+            var gp = openIsd(bibo, EnumSet.of(GPSession.APDUMode.RMAC));
+            gp.putKey(kpg.generateKeyPair().getPublic(), DM_TOKEN_KVN + 2, false);
+            var rsa = gp.getKeyInfoTemplate().stream().filter(k -> k.getVersion() == DM_TOKEN_KVN + 2).findFirst().orElseThrow();
             assertEquals(rsa.getType(), GPKeyInfo.GPKey.RSA_PUB_N);
         }
     }

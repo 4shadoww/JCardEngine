@@ -610,7 +610,8 @@ public class Simulator implements JavaCardEngine, JavaCardRuntime {
                 contextStack.clear();
             }
 
-            // if theSW = 0x61XX or 0x9XYZ than return data (ISO7816-3)
+            // if theSW = 0x61XX or 0x9XYZ than return data (ISO7816-3). JCRE concatenates the
+            // outgoing bytes the applet sent with the status word; it does not wrap them.
             if (theSW[0] == 0x61 || theSW[0] == 0x62 || theSW[0] == 0x63 || (theSW[0] >= (byte) 0x90 && theSW[0] <= (byte) 0x9F) || isNotAbortingCase(theSW)) {
                 response = new byte[responseBufferSize + 2];
                 Util.arrayCopyNonAtomic(responseBuffer, (short) 0, response, (short) 0, responseBufferSize);

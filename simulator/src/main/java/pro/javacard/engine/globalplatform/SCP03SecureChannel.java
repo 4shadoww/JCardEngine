@@ -31,6 +31,7 @@ public final class SCP03SecureChannel extends EngineSecureChannel {
     private final byte[] ssc = new byte[3];
     private final byte[] chaining = new byte[16];
     private final byte[] enc_counter = new byte[16];
+    private byte[] rmacKey;
 
     private byte[] ctx; // needed twice
 
@@ -81,6 +82,7 @@ public final class SCP03SecureChannel extends EngineSecureChannel {
             ctx = GPUtils.concatenate(host_challenge, card_challenge);
             macKey = keys.getSessionKey(GPCardKeys.KeyPurpose.MAC, ctx);
             encKey = keys.getSessionKey(GPCardKeys.KeyPurpose.ENC, ctx);
+            rmacKey = keys.getSessionKey(GPCardKeys.KeyPurpose.RMAC, ctx);
             byte[] cryptogram = GPCrypto.scp03_kdf(macKey, (byte) 0x00, ctx, s16 ? 128 : 64);
             byte[] resp = GPUtils.concatenate(kdd, new byte[]{currentMasterKey.kvn()}, SCP, card_challenge, cryptogram, ssc);
             System.arraycopy(resp, 0, buffer, ISO7816.OFFSET_CDATA, resp.length);
@@ -154,6 +156,66 @@ public final class SCP03SecureChannel extends EngineSecureChannel {
     private byte[] decryptCommand(byte[] cryptogram) throws GeneralSecurityException {
         byte[] iv = GPCrypto.aes_cbc(enc_counter, encKey, new byte[16]);
         return GPCrypto.unpad80(GPCrypto.aes_cbc_decrypt(cryptogram, encKey, iv));
+    }
+
+    // Amd D v1.2 Table 7-3: C-MAC, C-MAC+C-DECRYPTION, those plus R-MAC, and C-MAC+C-DECRYPTION+R-MAC+R-ENCRYPTION.
+    @Override
+    protected void checkSecurityLevel(byte p1) {
+        if (p1 != NO_SECURITY_LEVEL
+                && p1 != C_MAC
+                && p1 != (C_MAC | C_DECRYPTION)
+                && p1 != (C_MAC | R_MAC)
+                && p1 != (C_MAC | C_DECRYPTION | R_MAC)
+                && p1 != (C_MAC | C_DECRYPTION | R_MAC | R_ENCRYPTION)) {
+            ISOException.throwIt(ISO7816.SW_INCORRECT_P1P2);
+        }
+    }
+
+    // Amd D v1.2 6.2.5/6.2.7: encrypt the data field (if R-ENCRYPTION and non-empty), then append
+    // R-MAC over chaining value || (cipher)text || SW using S-RMAC. Error status words are returned
+    // unprotected. Writes in place and returns the length without the status bytes.
+    @Override
+    protected short wrapResponse(byte[] baBuffer, short sOffset, short sLength) {
+        int dataLen = sLength - 2;
+        byte sw1 = baBuffer[sOffset + dataLen];
+        byte sw2 = baBuffer[sOffset + dataLen + 1];
+        short sw = (short) (((sw1 & 0xFF) << 8) | (sw2 & 0xFF));
+        boolean rmac = (state & R_MAC) != 0;
+        boolean renc = (state & R_ENCRYPTION) != 0;
+        if ((!rmac && !renc) || !isProtectedStatus(sw)) {
+            return (short) dataLen;
+        }
+        try {
+            byte[] data = Arrays.copyOfRange(baBuffer, sOffset, sOffset + dataLen);
+            if (renc && data.length > 0) {
+                // Same encryption counter as C-DECRYPTION of this command, with MSB set to '80'
+                // so the ICV cannot collide with command encryption (Amd D v1.2 6.2.7).
+                byte[] responseCounter = enc_counter.clone();
+                responseCounter[0] = (byte) 0x80;
+                byte[] iv = GPCrypto.aes_cbc(responseCounter, encKey, new byte[16]);
+                data = GPCrypto.aes_cbc(GPCrypto.pad80(data, 16), encKey, iv);
+            }
+            if (rmac) {
+                var bo = new ByteArrayOutputStream();
+                bo.writeBytes(chaining);
+                bo.writeBytes(data);
+                bo.write(sw1);
+                bo.write(sw2);
+                byte[] cmac = GPCrypto.aes_cmac(rmacKey, bo.toByteArray(), 128);
+                int maclen = s16 ? 16 : 8;
+                data = GPUtils.concatenate(data, Arrays.copyOf(cmac, maclen));
+            }
+            if (sOffset + data.length > baBuffer.length) {
+                throw new ArrayIndexOutOfBoundsException(sOffset + data.length);
+            }
+            System.arraycopy(data, 0, baBuffer, sOffset, data.length);
+            return (short) data.length;
+        } catch (GeneralSecurityException e) {
+            log.error("Response wrap failed", e);
+            abort();
+            ISOException.throwIt(ISO7816.SW_SECURITY_STATUS_NOT_SATISFIED);
+            return 0;
+        }
     }
 
     @Override
@@ -266,7 +328,8 @@ public final class SCP03SecureChannel extends EngineSecureChannel {
     // ssc deliberately persists across sessions.
     @Override
     protected void wipeScpState() {
-        zeroize(encKey, macKey, chaining, enc_counter);
+        zeroize(encKey, macKey, rmacKey, chaining, enc_counter);
+        rmacKey = null;
         ctx = null;
     }
 

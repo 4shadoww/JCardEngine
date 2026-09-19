@@ -122,7 +122,7 @@ public final class SCP02SecureChannel extends EngineSecureChannel {
             bo.write(buffer[offset + ISO7816.OFFSET_INS]);
             bo.write(buffer[offset + ISO7816.OFFSET_P1]);
             bo.write(buffer[offset + ISO7816.OFFSET_P2]);
-            if (open && ((state & SecureChannel.C_DECRYPTION) == SecureChannel.C_DECRYPTION)) {
+            if (open && (state & SecureChannel.C_DECRYPTION) == SecureChannel.C_DECRYPTION && payload.length > 0) {
                 byte[] unpadded = GPCrypto.unpad80(des3_cbc_decrypt(payload, encKey, new byte[8]));
                 bo.write(unpadded.length + 8);
                 bo.writeBytes(unpadded);

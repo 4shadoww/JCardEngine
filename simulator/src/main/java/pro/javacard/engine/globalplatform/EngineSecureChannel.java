@@ -112,16 +112,22 @@ public abstract sealed class EngineSecureChannel implements SecureChannel permit
         }
     }
 
-    // EXTERNAL AUTHENTICATE security levels: GPC v2.3.1 Table E-11 and SCP03 Amd D v1.2 Table 7-6
-    // minus every row setting R-MAC or R-ENCRYPTION, which wrap() cannot honor.
-    protected static void checkSecurityLevel(byte p1) {
+    // EXTERNAL AUTHENTICATE security levels: GPC v2.3.1 Table E-11. SCP03 adds the R-MAC/R-ENCRYPTION
+    // rows from Amd D v1.2 Table 7-3.
+    protected void checkSecurityLevel(byte p1) {
         if (p1 != NO_SECURITY_LEVEL && p1 != C_MAC && p1 != (C_MAC | C_DECRYPTION)) {
             ISOException.throwIt(ISO7816.SW_INCORRECT_P1P2);
         }
     }
 
-    // Only the pass-through path exists while response protection is unimplemented: no security level
-    // requiring it can be negotiated, so wrap() just removes the status bytes the application appended.
+    // Amd D v1.2 6.2.5: only '9000' and warning status words carry R-MAC/R-ENCRYPTION.
+    static boolean isProtectedStatus(short sw) {
+        int sw1 = (sw >> 8) & 0xFF;
+        return sw == (short) 0x9000 || sw1 == 0x62 || sw1 == 0x63;
+    }
+
+    // wrap() input is the response APDU including the status bytes the application appended;
+    // the return is that APDU without the status bytes, after any R-MAC/R-ENCRYPTION.
     @Override
     public final short wrap(byte[] baBuffer, short sOffset, short sLength) throws ISOException {
         Objects.requireNonNull(baBuffer);
@@ -130,6 +136,12 @@ public abstract sealed class EngineSecureChannel implements SecureChannel permit
         if (sLength < 2) {
             ISOException.throwIt(ISO7816.SW_SECURITY_STATUS_NOT_SATISFIED);
         }
+        checkBounds(baBuffer, sOffset, sLength);
+        return wrapResponse(baBuffer, sOffset, sLength);
+    }
+
+    // Default: strip the status bytes. SCP03 overrides this when R-MAC/R-ENCRYPTION is active.
+    protected short wrapResponse(byte[] baBuffer, short sOffset, short sLength) {
         return (short) (sLength - 2);
     }
 

@@ -138,6 +138,22 @@ public class SecurityDomainApplet extends Applet {
     // b7-b1, so a non-final chunk is identified by P1.b8 alone, independent of chunk size.
     private static final List<Byte> CHAINABLE_INS = List.of(INS_DELETE, INS_INSTALL, INS_PUT_KEY);
 
+    // Append SW, wrap() as a real card applet does, then send. JCRE concatenates the status
+    // wrap() stripped. Warning SWs (6283, 6310) are thrown after send so they ride with the data.
+    // INITIALIZE UPDATE / EXTERNAL AUTHENTICATE are not sent through this helper (Amd D v1.2 6.2.5).
+    private static void send(APDU apdu, byte[] buffer, short offset, short length) {
+        send(apdu, buffer, offset, length, ISO7816.SW_NO_ERROR);
+    }
+
+    private static void send(APDU apdu, byte[] buffer, short offset, short length, short sw) {
+        Util.setShort(buffer, (short) (offset + length), sw);
+        short wrapped = Simulator.current().gp().getSecureChannel().wrap(buffer, offset, (short) (length + 2));
+        apdu.setOutgoingAndSend(offset, wrapped);
+        if (sw != ISO7816.SW_NO_ERROR) {
+            ISOException.throwIt(sw);
+        }
+    }
+
     // Keys owned by this Security Domain.
     private final LinkedHashMap<Byte, KeySet> keys = new LinkedHashMap<>();
 
@@ -172,12 +188,11 @@ public class SecurityDomainApplet extends Applet {
         if (selectingApplet()) {
             byte[] fci = fci(JCSystem.getAID());
             Util.arrayCopyNonAtomic(fci, (short) 0, buffer, (short) 0, (short) fci.length);
-            apdu.setOutgoingAndSend((short) 0, (short) fci.length);
             // GPC v2.3.1 Table 11-83: warning 6283 (FCI still returned) when selecting a Final Application while CARD_LOCKED.
             var self = sim.gp().getRegistryEntry(null);
-            if (self.isPrivileged(GPRegistryEntry.PRIVILEGE_FINAL_APPLICATION) && sim.gp().getCardState() == GPSystem.CARD_LOCKED) {
-                ISOException.throwIt(SW_CARD_LOCKED);
-            }
+            short sw = (self.isPrivileged(GPRegistryEntry.PRIVILEGE_FINAL_APPLICATION) && sim.gp().getCardState() == GPSystem.CARD_LOCKED)
+                    ? SW_CARD_LOCKED : ISO7816.SW_NO_ERROR;
+            send(apdu, buffer, (short) 0, (short) fci.length, sw);
             return;
         }
 
@@ -189,16 +204,22 @@ public class SecurityDomainApplet extends Applet {
 
         if (ins == EngineSecureChannel.INS_INITIALIZE_UPDATE || ins == EngineSecureChannel.INS_EXTERNAL_AUTHENTICATE) {
             // INITIALIZE UPDATE resolves its own master keys (caller context + KVN) inside the secure
-            // channel; EXTERNAL AUTHENTICATE reuses the session it established.
+            // channel; EXTERNAL AUTHENTICATE reuses the session it established. Neither response is
+            // wrap()'d (Amd D v1.2 6.2.5).
             short len = sc.processSecurity(apdu);
             apdu.setOutgoingAndSend(ISO7816.OFFSET_CDATA, len);
             return;
         }
 
         // GET DATA runs unauthenticated (CPLC/KIT are public; GPC v2.3.1 11.3 does not mandate
-        // auth): dispatched before the auth gate, no unwrap(), so clients send it plain.
+        // auth): clients may send it plain. When a session is open, gp-pro wraps GET DATA, so
+        // unwrap() still has to run for a secure-messaging command - C-MAC and the encryption
+        // counter must stay in lockstep with the off-card wrapper, including for R-ENCRYPTION.
         if (ins == INS_GET_DATA) {
-            apdu.setIncomingAndReceive();
+            short len = apdu.setIncomingAndReceive();
+            if ((buffer[ISO7816.OFFSET_CLA] & 0x04) == 0x04) {
+                sc.unwrap(buffer, ISO7816.OFFSET_CLA, (short) (ISO7816.OFFSET_CDATA + len));
+            }
             handleGetData(apdu, buffer);
             return;
         }
@@ -234,6 +255,7 @@ public class SecurityDomainApplet extends Applet {
             }
             chainBuffer.write(buffer, ISO7816.OFFSET_CDATA, len);
             if (more) {
+                send(apdu, buffer, (short) 0, (short) 0);
                 return;
             }
             byte[] wrapped = chainBuffer.toByteArray();
@@ -380,7 +402,7 @@ public class SecurityDomainApplet extends Applet {
         }
         personalizationTarget = targetAid;
         buffer[0] = 0x00;
-        apdu.setOutgoingAndSend((short) 0, (short) 1);
+        send(apdu, buffer, (short) 0, (short) 1);
     }
 
     // INSTALL [for Install (and Make Selectable)] - instantiates an applet from a loaded package.
@@ -462,7 +484,7 @@ public class SecurityDomainApplet extends Applet {
 
         // The update counter is bumped by gp().publish() at the commit point (GPC v2.3.1 Amd C 3.11.2.3).
         buffer[0] = 0x00;
-        apdu.setOutgoingAndSend((short) 0, (short) 1);
+        send(apdu, buffer, (short) 0, (short) 1);
     }
 
     // INSTALL [for make selectable] - promote a previously installed Application to SELECTABLE (GPC v2.3.1 9.3.7).
@@ -490,7 +512,7 @@ public class SecurityDomainApplet extends Applet {
         // Privileges (field 3) / Make Selectable Params (field 4) registry update and Token (field 5)
         // verification are out of scope (see installForInstallAndMakeSelectable TODO).
         buffer[0] = 0x00;
-        apdu.setOutgoingAndSend((short) 0, (short) 1);
+        send(apdu, buffer, (short) 0, (short) 1);
     }
 
     // INSTALL [for registry update] - update a live Application's contactless / system registry
@@ -524,7 +546,7 @@ public class SecurityDomainApplet extends Applet {
             }
             clState.ifPresent(s -> sim.gp().defaultInitial = s);
             buffer[0] = 0x00;
-            apdu.setOutgoingAndSend((short) 0, (short) 1);
+            send(apdu, buffer, (short) 0, (short) 1);
             return;
         }
 
@@ -546,7 +568,7 @@ public class SecurityDomainApplet extends Applet {
         // The current activation state is untouched (that is SET STATUS / CRS), so no event and no counter bump.
         clState.ifPresent(s -> entry.initial = s);
         buffer[0] = 0x00;
-        apdu.setOutgoingAndSend((short) 0, (short) 1);
+        send(apdu, buffer, (short) 0, (short) 1);
     }
 
     // CL activation state from EF { A0 { 81 } }, if present. Throws on a bad state byte (CLState.parse)
@@ -626,7 +648,7 @@ public class SecurityDomainApplet extends Applet {
         sim.gp().extradite(targetEntry, newSDEntry);
         log.info("Extradited {} to SD {}", target, newSD);
         buffer[0] = 0x00;
-        apdu.setOutgoingAndSend((short) 0, (short) 1);
+        send(apdu, buffer, (short) 0, (short) 1);
     }
 
     // STORE DATA - two roles, split on whether a personalization target is set:
@@ -656,10 +678,10 @@ public class SecurityDomainApplet extends Applet {
             }
             if (outLen > 0) {
                 Util.arrayCopyNonAtomic(outBuffer, (short) 0, buffer, (short) 0, outLen);
-                apdu.setOutgoingAndSend((short) 0, outLen);
+                send(apdu, buffer, (short) 0, outLen);
             } else {
                 buffer[0] = 0x00;
-                apdu.setOutgoingAndSend((short) 0, (short) 1);
+                send(apdu, buffer, (short) 0, (short) 1);
             }
             return;
         }
@@ -670,7 +692,7 @@ public class SecurityDomainApplet extends Applet {
                 personalizationTarget = null;
             }
             buffer[0] = 0x00;
-            apdu.setOutgoingAndSend((short) 0, (short) 1);
+            send(apdu, buffer, (short) 0, (short) 1);
             return;
         }
         log.warn("STORE DATA: target lacks Personalization/Application: {}", targetAid);
@@ -695,6 +717,7 @@ public class SecurityDomainApplet extends Applet {
             commitStoreGPData();
         }
         // GPC v2.3.1 11.11.3.1: ISO case 3 STORE DATA returns no response data field.
+        send(apdu, buffer, (short) 0, (short) 0);
     }
 
     private void commitStoreGPData() {
@@ -799,7 +822,7 @@ public class SecurityDomainApplet extends Applet {
 
         // The update counter is bumped by internalDeleteApplet -> gp().remove() above (GPC v2.3.1 Amd C 3.11.2.3).
         buffer[0] = 0x00;
-        apdu.setOutgoingAndSend((short) 0, (short) 1);
+        send(apdu, buffer, (short) 0, (short) 1);
     }
 
     // DELETE [key] (GPC v2.3.1 11.2.2.3.2). KeySet stores an ENC/MAC/DEK triple atomically per KVN,
@@ -821,7 +844,7 @@ public class SecurityDomainApplet extends Applet {
         }
 
         buffer[0] = 0x00;
-        apdu.setOutgoingAndSend((short) 0, (short) 1);
+        send(apdu, buffer, (short) 0, (short) 1);
     }
 
     // PUT KEY (GPC v2.3.1 11.8). P1 = 0 adds a new KVN, else replaces that KVN.
@@ -934,7 +957,7 @@ public class SecurityDomainApplet extends Applet {
 
         byte[] response = kcvOut.toByteArray();
         Util.arrayCopyNonAtomic(response, (short) 0, buffer, (short) 0, (short) response.length);
-        apdu.setOutgoingAndSend((short) 0, (short) response.length);
+        send(apdu, buffer, (short) 0, (short) response.length);
     }
 
     // Parse one PUT KEY block: decrypt cgram in place (SC picks session/static DEK), verify the
@@ -1052,6 +1075,7 @@ public class SecurityDomainApplet extends Applet {
         }
         // The update counter is bumped by gp().setCardLifecycleState() on success (GPC v2.3.1 Amd C 3.11.2.3).
         // GPC v2.3.1 11.10.3.1: the data field of the response message shall not be present.
+        send(apdu, buffer, (short) 0, (short) 0);
     }
 
     // SET STATUS [for application] (P1=0x40): the data field is the raw target Application AID,
@@ -1086,6 +1110,7 @@ public class SecurityDomainApplet extends Applet {
             ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
         }
         // GPC v2.3.1 11.10.3.1: the data field of the response message shall not be present.
+        send(apdu, buffer, (short) 0, (short) 0);
     }
 
     // GPC v2.3.1 11.4: tagged GET STATUS only (P2 bit 1 required). P1 = scope, P2 bit 0 =
@@ -1121,10 +1146,8 @@ public class SecurityDomainApplet extends Applet {
         pendingStatusOffset += toSend;
 
         boolean more = pendingStatusOffset < (short) pendingStatus.length;
-        apdu.setOutgoingAndSend((short) 0, toSend);
-        if (more) {
-            ISOException.throwIt(SW_RESPONSE_BYTES_REMAINING);
-        }
+        send(apdu, buffer, (short) 0, toSend, more ? SW_RESPONSE_BYTES_REMAINING : ISO7816.SW_NO_ERROR);
+        // send() throws 6310 when more remains, so this clear runs only on the last chunk.
         pendingStatus = null;
     }
 
@@ -1147,7 +1170,7 @@ public class SecurityDomainApplet extends Applet {
             response = TLV.of(element.tag(), stored).encode();
         }
         Util.arrayCopyNonAtomic(response, (short) 0, buffer, (short) 0, (short) response.length);
-        apdu.setOutgoingAndSend((short) 0, (short) response.length);
+        send(apdu, buffer, (short) 0, (short) response.length);
     }
 
     // GPC v2.3.1 11.3.3.1.1 (Table 11-28): 'E0' Key Information Template wrapping one C0 per (KID, KVN).
